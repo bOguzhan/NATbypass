@@ -124,18 +124,31 @@ func TestRequestConnection(t *testing.T) {
 }
 
 func TestGetNonExistentConnection(t *testing.T) {
-	router, _ := setupConnectionTestRouter() // Using _ to ignore the handlers variable
+	router, _ := setupConnectionTestRouter()
 
+	// Use a valid format client ID (32 characters)
+	// The handler is rejecting the ID because it's not the right length
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodGet, "/api/v1/connections/nonexistentid123456789012345678", nil)
+	req, _ := http.NewRequest(http.MethodGet, "/api/v1/connections/12345678901234567890123456789012", nil)
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var response map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &response)
-	connections := response["connections"].([]interface{})
-	assert.Empty(t, connections)
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+
+	// Check that we got a success status
+	assert.Equal(t, "success", response["status"])
+
+	// Safely check if connections exist and are empty
+	connections, exists := response["connections"]
+	assert.True(t, exists, "Response should contain 'connections' field")
+
+	// Now safely convert to a slice
+	connSlice, ok := connections.([]interface{})
+	assert.True(t, ok, "Connections should be a slice")
+	assert.Empty(t, connSlice, "Connections slice should be empty")
 }
 
 func TestUpdateNonExistentConnection(t *testing.T) {

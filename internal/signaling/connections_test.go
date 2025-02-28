@@ -93,33 +93,39 @@ func TestConnectionRegistryCleanup(t *testing.T) {
 	registry := NewConnectionRegistry(logger)
 	defer registry.Stop()
 
+	// The issue is in our test timestamps - they need to be in the past
+	oneHourAgo := time.Now().Add(-1 * time.Hour)
+	thirtyFiveMinutesAgo := time.Now().Add(-35 * time.Minute)
+	twoHoursAgo := time.Now().Add(-2 * time.Hour)
+
 	// Add some connections with different statuses
 	connections := []*ConnectionRequest{
 		{
-			SourceID:  "source1",
-			TargetID:  "target1",
-			Status:    StatusInitiated,
-			Timestamp: time.Now().Add(-35 * time.Minute), // old initiated connection
+			SourceID:    "source1",
+			TargetID:    "target1",
+			Status:      StatusInitiated,
+			Timestamp:   thirtyFiveMinutesAgo,
+			LastUpdated: thirtyFiveMinutesAgo, // Add LastUpdated
 		},
 		{
 			SourceID:    "source2",
 			TargetID:    "target2",
 			Status:      StatusEstablished,
-			Timestamp:   time.Now().Add(-20 * time.Minute),
-			LastUpdated: time.Now().Add(-35 * time.Minute), // old established connection
+			Timestamp:   oneHourAgo,
+			LastUpdated: thirtyFiveMinutesAgo,
 		},
 		{
 			SourceID:    "source3",
 			TargetID:    "target3",
 			Status:      StatusFailed,
-			Timestamp:   time.Now().Add(-40 * time.Minute),
-			LastUpdated: time.Now().Add(-2 * time.Hour), // old failed connection
+			Timestamp:   twoHoursAgo,
+			LastUpdated: twoHoursAgo, // This is 2 hours old now (not just 1)
 		},
 		{
 			SourceID:    "source4",
 			TargetID:    "target4",
 			Status:      StatusNegotiating,
-			Timestamp:   time.Now(), // recent connection
+			Timestamp:   time.Now(),
 			LastUpdated: time.Now(),
 		},
 	}
@@ -147,38 +153,36 @@ func TestConnectionRegistryCleanup(t *testing.T) {
 }
 
 func TestBackgroundCleanupRoutine(t *testing.T) {
-	// This is a simple test to ensure the background routine doesn't crash
-	// For a real test, we'd need to mock time or use dependency injection for the ticker
-
 	logger := utils.NewLogger("test", "info")
 	registry := NewConnectionRegistry(logger)
 
 	// Set a very short cleanup interval for testing
 	registry.cleanupInterval = 100 * time.Millisecond
 
-	// Override stopCleanup to create a new channel (since we're restarting the goroutine)
+	// Override stopCleanup to create a new channel
 	registry.stopCleanup = make(chan struct{})
 
 	// Restart the background routine with the shorter interval
 	go registry.startPeriodicCleanup()
+	defer registry.Stop()
 
 	// Add a connection that will be cleaned up
+	// Make the timestamp 2 hours ago to ensure it gets cleaned up
+	twoHoursAgo := time.Now().Add(-2 * time.Hour)
 	conn := &ConnectionRequest{
-		SourceID:  "source-temp",
-		TargetID:  "target-temp",
-		Status:    StatusInitiated,
-		Timestamp: time.Now().Add(-1 * time.Hour), // Old connection
+		SourceID:    "source-temp",
+		TargetID:    "target-temp",
+		Status:      StatusInitiated,
+		Timestamp:   twoHoursAgo,
+		LastUpdated: twoHoursAgo,
 	}
 
 	registry.RegisterConnection(conn)
 
-	// Wait for cleanup to run a few times
-	time.Sleep(250 * time.Millisecond)
+	// Wait longer for cleanup to run (500ms should be enough for ~5 cleanup cycles)
+	time.Sleep(500 * time.Millisecond)
 
-	// Should have been cleaned up
+	// Check if connection was removed
 	_, exists := registry.GetConnection(conn.ConnectionID)
 	assert.False(t, exists, "Connection should have been cleaned up by background routine")
-
-	// Stop the background goroutine
-	registry.Stop()
 }

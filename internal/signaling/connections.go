@@ -232,27 +232,41 @@ func (r *ConnectionRegistry) CleanupStaleConnections(maxAge time.Duration) int {
 	cutoff := time.Now().Add(-maxAge)
 	count := 0
 
+	// Add debug logging to see what's happening
+	r.logger.Debugf("Running cleanup with cutoff time: %v", cutoff)
+
 	for id, conn := range r.connections {
+		shouldDelete := false
+
 		// Different cleanup policies based on connection status
 		switch conn.Status {
 		case StatusEstablished:
 			// For established connections, check last updated time instead of created time
 			if conn.LastUpdated.Before(cutoff) {
-				delete(r.connections, id)
-				count++
+				shouldDelete = true
+				r.logger.Debugf("Removing established connection %s: last updated %v before cutoff %v",
+					id, conn.LastUpdated, cutoff)
 			}
 		case StatusFailed, StatusClosed:
-			// Failed or closed connections are removed more aggressively (after 1 hour)
-			if conn.LastUpdated.Before(time.Now().Add(-1 * time.Hour)) {
-				delete(r.connections, id)
-				count++
+			// Fixed timestamp for failed/closed connections (1 hour)
+			failedCutoff := time.Now().Add(-1 * time.Hour)
+			if conn.LastUpdated.Before(failedCutoff) {
+				shouldDelete = true
+				r.logger.Debugf("Removing failed/closed connection %s: last updated %v before cutoff %v",
+					id, conn.LastUpdated, failedCutoff)
 			}
 		default:
 			// For other statuses (initiated, negotiating), use the original timestamp
 			if conn.Timestamp.Before(cutoff) {
-				delete(r.connections, id)
-				count++
+				shouldDelete = true
+				r.logger.Debugf("Removing connection %s: timestamp %v before cutoff %v",
+					id, conn.Timestamp, cutoff)
 			}
+		}
+
+		if shouldDelete {
+			delete(r.connections, id)
+			count++
 		}
 	}
 
