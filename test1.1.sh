@@ -14,7 +14,7 @@ echo ""
 # Initialize Go modules if not already initialized
 if [ ! -f "go.mod" ]; then
   echo "Initializing Go modules..."
-  go mod init github.com/yourusername/p2p-nat-traversal
+  go mod init github.com/bOguzhan/NATbypass
   echo "✓ Go modules initialized"
 else
   echo "✓ Go modules already initialized"
@@ -42,15 +42,13 @@ echo ""
 mkdir -p test
 
 # Create a simple test program for STUN discovery
-cat > test/stun_test.go <<EOL
+cat > test/main.go <<EOL
 package main
 
 import (
     "fmt"
     "log"
-    "os"
-    
-    "github.com/yourusername/p2p-nat-traversal/pkg/networking"
+    "github.com/bOguzhan/NATbypass/pkg/networking"
 )
 
 func main() {
