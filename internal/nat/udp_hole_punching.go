@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"net"
+	"strconv"
 	"sync"
 	"time"
 
@@ -40,7 +41,7 @@ type UDPHolePuncher struct {
 
 // NewUDPHolePuncher creates a new UDP hole punching manager
 func NewUDPHolePuncher(localPort int) (*UDPHolePuncher, error) {
-	addr, err := net.ResolveUDPAddr("udp", ":"+string(localPort))
+	addr, err := net.ResolveUDPAddr("udp", ":"+strconv.Itoa(localPort))
 	if err != nil {
 		return nil, err
 	}

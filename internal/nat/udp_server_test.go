@@ -2,8 +2,8 @@ package nat
 
 import (
 	"context"
-	"fmt"
 	"net"
+	"strconv" // Add this import
 	"sync"
 	"testing"
 	"time"
@@ -15,7 +15,7 @@ import (
 func TestUDPServerBasicOperations(t *testing.T) {
 	// Choose a port that's likely to be available for testing
 	testPort := 12345
-	listenAddr := "127.0.0.1:" + string(testPort)
+	listenAddr := "127.0.0.1:" + strconv.Itoa(testPort) // Fix here
 
 	// Create a UDP server
 	server, err := NewUDPServer(listenAddr)
@@ -81,8 +81,8 @@ func TestUDPServerHolePunching(t *testing.T) {
 	testPort1 := 12346
 	testPort2 := 12347
 
-	listenAddr1 := "127.0.0.1:" + string(testPort1)
-	listenAddr2 := "127.0.0.1:" + string(testPort2)
+	listenAddr1 := "127.0.0.1:" + strconv.Itoa(testPort1) // Fix here
+	listenAddr2 := "127.0.0.1:" + strconv.Itoa(testPort2) // Fix here
 
 	// Create two UDP servers (simulating two different hosts)
 	server1, err := NewUDPServer(listenAddr1)
@@ -226,7 +226,7 @@ func TestUDPHolePuncher(t *testing.T) {
 func TestUDPServerConcurrentOperations(t *testing.T) {
 	// Choose a port that's likely to be available for testing
 	testPort := 12349
-	listenAddr := fmt.Sprintf("127.0.0.1:%d", testPort)
+	listenAddr := "127.0.0.1:" + strconv.Itoa(testPort) // Fix here
 
 	// Create a UDP server
 	server, err := NewUDPServer(listenAddr)
@@ -265,7 +265,7 @@ func TestUDPServerConcurrentOperations(t *testing.T) {
 			defer clientConn.Close()
 
 			// Register client
-			clientID := "test-client-" + string(clientNum)
+			clientID := "test-client-" + strconv.Itoa(clientNum) // Fix here
 			regPacket := &protocol.Packet{
 				Type:    protocol.PacketTypeRegistration,
 				Payload: []byte(clientID),
