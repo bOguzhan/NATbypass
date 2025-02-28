@@ -1,110 +1,80 @@
-# Peer-to-Peer NAT Traversal System
+# NATbypass: Multi-Protocol P2P NAT Traversal System
 
-This project implements a **Peer-to-Peer NAT Traversal** system with minimal server involvement. The system allows clients to directly communicate with each other after discovering their public IP and port via a **Mediatory Server**. The primary goal is to minimize server egress and use **hole-punching** techniques for establishing direct peer-to-peer communication.
+A peer-to-peer NAT traversal system that enables direct client-to-client communication through UDP and TCP protocols with minimal server involvement.
 
-## Architecture Overview
+## Overview
 
-1. **Mediatory Server (Signaling Server)**:
-   - Facilitates initial connection between client and server.
-   - Provides clients with the public-facing IP address and port.
-   - Handles **STUN** requests to discover its public IP and port.
-   
-2. **Application Server**:
-   - Once the Mediatory Server has provided the public IPs/ports, clients will attempt direct communication.
-   - **UDP** hole-punching is used for NAT traversal to establish direct communication.
-   - Once the connection is established, no further server involvement is required.
+NATbypass enables direct peer-to-peer connections between clients behind NAT without relying on relay servers, supporting both UDP and TCP protocols. The system intelligently selects the optimal protocol based on NAT configuration and provides fallback mechanisms when needed.
 
-3. **Tech Stack**:
-   - **Programming Language**: Go (Golang)
-   - **Web Framework**: Gin (for HTTP signaling)
-   - **Cloud Provider**: Google Cloud Platform (GCP)
-   - **Containerization**: Docker
-   - **Networking**: UDP for direct peer-to-peer communication, STUN for NAT discovery
+### Key Features
 
-## Features
+- **Multi-Protocol Support**: Works with both UDP and TCP protocols
+- **Protocol-Agnostic API**: Single unified API with protocol-specific implementations
+- **Smart Protocol Selection**: Automatic selection based on NAT type and network conditions
+- **Fallback Mechanisms**: Gracefully fall back to alternative protocol when primary fails
+- **Minimal Server Dependency**: Direct P2P connections with only signaling through server
+- **No TURN Required**: Eliminates need for bandwidth-intensive TURN relay servers
+- **NAT Type Detection**: Identifies client NAT configuration for optimal strategy selection
 
-- **STUN-based NAT Discovery**: Clients use the server to discover public IPs and ports for NAT hole-punching.
-- **Minimal Server Egress**: Server only facilitates signaling, no data relaying.
-- **Hole-Punching**: Clients attempt to establish direct peer-to-peer communication using NAT hole-punching.
-- **No Fallback to TURN Server**: If NAT traversal fails, the connection attempt is aborted.
-- **Lightweight and Scalable**: Built using Go, a fast and efficient language for handling concurrent requests.
+## Architecture
 
-## Requirements
+The system consists of two main components:
 
-- **Go**: v1.18 or later
-- **Docker**: For containerization and deployment
-- **Google Cloud Platform**: For hosting the Mediatory Server (Compute Engine, App Engine, or Kubernetes Engine)
+1. **Mediatory Server**
+   - Provides signaling service for clients to discover each other
+   - Implements STUN functionality for NAT type detection
+   - Facilitates initial connection negotiation and protocol selection
 
-## Getting Started
+2. **Application Server**
+   - Enables NAT hole-punching for both UDP and TCP
+   - Manages connection tracking and state
+   - Facilitates direct P2P communication
 
-### 1. Clone the repository:
+## Protocol Support
 
+### UDP Traversal
+- Traditional UDP hole punching
+- Optimized for connectionless communication
+- Lower latency, higher success rate
+
+### TCP Traversal
+- TCP simultaneous open technique
+- Connection-oriented with reliable delivery
+- Better compatibility with restrictive firewalls
+
+## Development
+
+### Prerequisites
+- Go 1.18+
+- Docker and Docker Compose
+- Git
+- Access to Google Cloud Platform (for deployment)
+
+### Local Development
+
+1. Clone the repository
 ```bash
-git clone https://github.com/bOguzhan/NATbypass
+git clone https://github.com/yourusername/NATbypass.git
 cd NATbypass
 ```
-2. Set up the Mediatory Server (Signaling Server)
 
-    Use GCP's Compute Engine or App Engine to deploy the Mediatory Server.
-    The Mediatory Server handles STUN requests and returns public-facing IP and port information.
+Install dependencies
+Run locally
+Run with Docker
+Protocol Selection
+The system automatically selects the optimal protocol based on:
 
-3. Build the Application Server
+NAT type detection
+Network conditions
+Application requirements
+You can also explicitly select your preferred protocol through configuration.
 
-    The Application Server uses Go for peer-to-peer communication.
-    After the initial handshake, clients directly communicate via UDP.
+Deployment
+Google Cloud Platform
+Set up GCP project
+Deploy services
+License
+MIT License
 
-4. Run the Application
-
-    Build the Go server:
-
-go build -o mediatory-server ./cmd/mediatory-server
-go build -o application-server ./cmd/application-server
-
-    Run the Mediatory Server:
-
-./mediatory-server
-
-    Run the Application Server:
-
-./application-server
-
-5. Docker Setup (Optional)
-
-To deploy using Docker for both the Mediatory Server and Application Server, create a Docker image for each component and deploy them:
-
-docker build -t mediatory-server ./cmd/mediatory-server
-docker build -t application-server ./cmd/application-server
-
-Then, run the containers:
-
-docker run -d -p 8080:8080 mediatory-server
-docker run -d -p 8081:8081 application-server
-
-## Internal Packages
-
-This directory contains internal packages that are specific to this project and not intended for external use.
-
-### Directories
-
-- `discovery/`: Components for peer discovery mechanisms
-- `nat/`: NAT traversal utilities and implementations
-- `signaling/`: Signaling protocols and implementations for peer coordination
-- `stun/`: STUN protocol implementations and wrappers
-
-## Testing
-
-### Unit Tests:
-
-go test ./...
-
-### Integration Tests:
-
-Ensure that both Mediatory Server and Application Server are able to establish direct communication between peers after the initial handshake.
-
-## Contributing
-
-We welcome contributions! Please fork the repository and submit a pull request. For any bug reports or feature requests, create an issue.
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
+Contributing
+Contributions are welcome! Please feel free to submit a Pull Request.
