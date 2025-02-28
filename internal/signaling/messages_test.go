@@ -2,6 +2,7 @@
 package signaling
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -11,16 +12,17 @@ import (
 )
 
 func TestMessageQueue(t *testing.T) {
-	logger := utils.NewLogger("test")
+	logger := utils.NewLogger("test", "info")
 	queue := NewMessageQueue(logger)
 
 	// Test adding a message
+	payload, _ := json.Marshal(map[string]interface{}{"sdp": "test offer"})
 	msg := protocol.Message{
 		Type:      protocol.TypeOffer,
 		ClientID:  "client1",
 		TargetID:  "client2",
 		Timestamp: time.Now(),
-		Payload:   map[string]interface{}{"sdp": "test offer"},
+		Payload:   json.RawMessage(payload),
 	}
 
 	queue.AddMessage("client2", msg)
@@ -41,11 +43,13 @@ func TestMessageQueue(t *testing.T) {
 	assert.Empty(t, messages)
 
 	// Test cleanup of old messages
+	oldPayload, _ := json.Marshal(map[string]interface{}{"sdp": "old answer"})
 	queue.AddMessage("client3", protocol.Message{
 		Type:      protocol.TypeAnswer,
 		ClientID:  "client3",
 		TargetID:  "client4",
 		Timestamp: time.Now().Add(-10 * time.Minute),
+		Payload:   json.RawMessage(oldPayload),
 	})
 
 	count := queue.CleanupOldMessages(5 * time.Minute)
