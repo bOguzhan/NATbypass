@@ -5,15 +5,13 @@ import (
 	"testing"
 
 	"github.com/bOguzhan/NATbypass/internal/utils"
-	"github.com/sirupsen/logrus"
 )
 
 func TestSTUNClient(t *testing.T) {
-	utilsLogger := utils.NewLogger("stun-test", "info")
+	_ = utils.NewLogger("stun-test", "info")
 
-	// Create a logrus logger for the STUN client
-	logger := logrus.New()
-	logger.SetLevel(logrus.InfoLevel)
+	// Create a utils logger for the STUN client
+	logger := utils.NewLogger("stun-client", "info")
 
 	// Use Google's public STUN server for testing
 	client := NewClient(logger, "stun.l.google.com:19302", 5, 3)
