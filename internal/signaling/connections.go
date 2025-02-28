@@ -21,7 +21,9 @@ type ConnectionRequest struct {
 	TargetAddress string    `json:"target_address,omitempty"`
 }
 
-// ConnectionRegistry manages active connection requests between clients
+// ConnectionRegistry manages active connection requests between clients.
+// It provides thread-safe operations for storing, retrieving, and removing
+// connection requests between peers.
 type ConnectionRegistry struct {
 	mu          sync.RWMutex
 	connections map[string]*ConnectionRequest

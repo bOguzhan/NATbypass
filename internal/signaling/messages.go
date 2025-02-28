@@ -9,7 +9,8 @@ import (
 	"github.com/bOguzhan/NATbypass/pkg/protocol"
 )
 
-// MessageQueue stores messages waiting to be delivered to clients
+// MessageQueue stores and manages messages waiting to be delivered to clients.
+// It provides thread-safe operations for adding, retrieving, and cleaning up messages.
 type MessageQueue struct {
 	mu       sync.RWMutex
 	messages map[string][]protocol.Message // Map client ID to their message queue
