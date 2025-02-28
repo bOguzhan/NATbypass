@@ -229,11 +229,16 @@ func (r *ConnectionRegistry) CleanupStaleConnections(maxAge time.Duration) int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	cutoff := time.Now().Add(-maxAge)
+	now := time.Now()
+	cutoff := now.Add(-maxAge)
 	count := 0
 
-	// Add debug logging to see what's happening
+	// Add debug logging
 	r.logger.Debugf("Running cleanup with cutoff time: %v", cutoff)
+	r.logger.Debugf("Initial connection count: %d", len(r.connections))
+
+	// Store IDs to delete to avoid map modification during iteration
+	toDelete := make([]string, 0)
 
 	for id, conn := range r.connections {
 		shouldDelete := false
@@ -241,33 +246,39 @@ func (r *ConnectionRegistry) CleanupStaleConnections(maxAge time.Duration) int {
 		// Different cleanup policies based on connection status
 		switch conn.Status {
 		case StatusEstablished:
-			// For established connections, check last updated time instead of created time
+			// For established connections, check last updated time
 			if conn.LastUpdated.Before(cutoff) {
 				shouldDelete = true
-				r.logger.Debugf("Removing established connection %s: last updated %v before cutoff %v",
+				r.logger.Debugf("Will remove established connection %s: last updated %v before cutoff %v",
 					id, conn.LastUpdated, cutoff)
 			}
 		case StatusFailed, StatusClosed:
-			// Fixed timestamp for failed/closed connections (1 hour)
-			failedCutoff := time.Now().Add(-1 * time.Hour)
+			// Failed/closed connections removed after 1 hour
+			failedCutoff := now.Add(-1 * time.Hour)
 			if conn.LastUpdated.Before(failedCutoff) {
 				shouldDelete = true
-				r.logger.Debugf("Removing failed/closed connection %s: last updated %v before cutoff %v",
+				r.logger.Debugf("Will remove failed/closed connection %s: last updated %v before failedCutoff %v",
 					id, conn.LastUpdated, failedCutoff)
 			}
 		default:
-			// For other statuses (initiated, negotiating), use the original timestamp
+			// For initiated/negotiating statuses, use timestamp
 			if conn.Timestamp.Before(cutoff) {
 				shouldDelete = true
-				r.logger.Debugf("Removing connection %s: timestamp %v before cutoff %v",
+				r.logger.Debugf("Will remove connection %s: timestamp %v before cutoff %v",
 					id, conn.Timestamp, cutoff)
 			}
 		}
 
 		if shouldDelete {
-			delete(r.connections, id)
-			count++
+			toDelete = append(toDelete, id)
 		}
+	}
+
+	// Now actually delete the connections
+	for _, id := range toDelete {
+		r.logger.Debugf("Deleting connection %s", id)
+		delete(r.connections, id)
+		count++
 	}
 
 	if count > 0 {
