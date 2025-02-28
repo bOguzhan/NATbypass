@@ -41,3 +41,7 @@ run-mediatory: build-mediatory
 run-application: build-application
 	@echo "Running application server..."
 	./$(BUILD_DIR)/application-server
+
+test-networking: 
+	@echo "Testing networking package..."
+	$(GO) test -v ./pkg/networking
