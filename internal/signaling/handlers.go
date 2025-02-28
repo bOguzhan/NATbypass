@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/bOguzhan/NATbypass/internal/utils"
+	"github.com/bOguzhan/NATbypass/pkg/networking"
 	"github.com/gin-gonic/gin"
 )
 
@@ -14,6 +15,7 @@ import (
 type Handlers struct {
 	logger *utils.Logger
 	server *Server // Reference to the server for client management
+	config *utils.Config
 }
 
 // NewHandlers creates a new instance of signaling handlers
@@ -26,6 +28,11 @@ func NewHandlers(logger *utils.Logger) *Handlers {
 // SetServer sets the server reference
 func (h *Handlers) SetServer(server *Server) {
 	h.server = server
+}
+
+// SetConfig sets the configuration reference
+func (h *Handlers) SetConfig(config *utils.Config) {
+	h.config = config
 }
 
 // RegisterClient handles client registration requests
@@ -95,21 +102,51 @@ func (h *Handlers) RegisterClient(c *gin.Context) {
 	})
 }
 
-// GetPublicAddress returns the client's public IP and port
+// GetPublicAddress returns the client's public IP and port using STUN
 func (h *Handlers) GetPublicAddress(c *gin.Context) {
 	// Get client's IP from headers or connection
 	clientIP := c.ClientIP()
 
-	// TODO: Use STUN to determine actual public address
-	// For now, just return what we have
+	// Use STUN to determine actual public address
+	stunServer := "stun.l.google.com:19302" // Default STUN server
+
+	h.logger.Debug("Attempting STUN discovery for client address")
+
+	// Create STUN config
+	stunConfig := networking.STUNConfig{
+		Server:         stunServer,
+		TimeoutSeconds: 5,
+		RetryCount:     3,
+	}
+
+	addr, err := networking.DiscoverPublicAddressWithConfig(stunConfig)
+
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"error":     err.Error(),
+			"client_ip": clientIP,
+		}).Warn("Failed to discover public address via STUN")
+
+		// Fall back to client IP from HTTP headers
+		c.JSON(http.StatusOK, gin.H{
+			"status":    "partial",
+			"ip":        clientIP,
+			"message":   "STUN discovery failed, using HTTP-derived IP",
+			"timestamp": time.Now(),
+		})
+		return
+	}
 
 	h.logger.WithFields(map[string]interface{}{
 		"client_ip": clientIP,
-	}).Debug("Public address requested")
+		"stun_ip":   addr.IP.String(),
+		"stun_port": addr.Port,
+	}).Debug("Public address discovered via STUN")
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":    "success",
-		"ip":        clientIP,
+		"ip":        addr.IP.String(),
+		"port":      addr.Port,
 		"timestamp": time.Now(),
 	})
 }
@@ -135,11 +172,27 @@ func (h *Handlers) Heartbeat(c *gin.Context) {
 			info.LastSeen = time.Now()
 			info.IsOnline = true
 			h.server.RegisterClient(req.ClientID, info) // Update info
+
+			c.JSON(http.StatusOK, gin.H{
+				"status":    "ok",
+				"timestamp": time.Now(),
+			})
+			return
 		}
+
+		// Client ID not found
+		c.JSON(http.StatusNotFound, gin.H{
+			"status":  "error",
+			"error":   "client_not_found",
+			"message": "The specified client ID is not registered",
+		})
+		return
 	}
 
+	// Server reference not available
 	c.JSON(http.StatusOK, gin.H{
 		"status":    "ok",
+		"message":   "Heartbeat received, but client tracking is not available",
 		"timestamp": time.Now(),
 	})
 }

@@ -44,6 +44,10 @@ func main() {
 	// Create and configure server
 	server := signaling.NewServer(logger)
 
+	// Create handlers and set server reference
+	handlers := server.GetHandlers()
+	handlers.SetServer(server)
+
 	// Start HTTP server in a goroutine
 	serverAddr := fmt.Sprintf("%s:%d",
 		cfg.Servers.Mediatory.Host,
@@ -53,7 +57,7 @@ func main() {
 		logger.Infof("Mediatory Server listening on %s", serverAddr)
 		if err := server.Start(serverAddr); err != nil {
 			if err != http.ErrServerClosed {
-				logger.Fatalf("Failed to start server: %v", err)
+				logger.Errorf("Failed to start server: %v", err)
 			}
 		}
 	}()
