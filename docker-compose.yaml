@@ -1,0 +1,22 @@
+version: '3'
+
+services:
+  mediatory-server:
+    build:
+      context: .
+      dockerfile: deployments/mediatory-server/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+    restart: unless-stopped
+
+  application-server:
+    build:
+      context: .
+      dockerfile: deployments/application-server/Dockerfile
+    ports:
+      - "8081:8081/udp"
+    environment:
+      - PORT=8081
+    restart: unless-stopped

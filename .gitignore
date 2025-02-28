@@ -1,0 +1,43 @@
+# .gitignore
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.bin
+
+# Go specific
+*.o
+*.a
+*.test
+*.out
+*.prof
+/vendor/
+/Godeps/
+
+# Output directories
+/bin/
+/dist/
+
+# macOS
+.DS_Store
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment variables
+.env
+.env.local
+
+# Logs
+*.log
+
+# Temp files
+tmp/
+
+# Build files
+build/

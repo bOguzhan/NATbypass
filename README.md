@@ -80,17 +80,31 @@ Then, run the containers:
 docker run -d -p 8080:8080 mediatory-server
 docker run -d -p 8081:8081 application-server
 
-Testing
-Unit Tests:
+## Internal Packages
+
+This directory contains internal packages that are specific to this project and not intended for external use.
+
+### Directories
+
+- `discovery/`: Components for peer discovery mechanisms
+- `nat/`: NAT traversal utilities and implementations
+- `signaling/`: Signaling protocols and implementations for peer coordination
+- `stun/`: STUN protocol implementations and wrappers
+
+## Testing
+
+### Unit Tests:
 
 go test ./...
 
-Integration Tests:
+### Integration Tests:
 
 Ensure that both Mediatory Server and Application Server are able to establish direct communication between peers after the initial handshake.
-Contributing
+
+## Contributing
 
 We welcome contributions! Please fork the repository and submit a pull request. For any bug reports or feature requests, create an issue.
-License
+
+## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
