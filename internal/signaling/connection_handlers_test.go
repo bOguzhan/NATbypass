@@ -29,7 +29,7 @@ func setupConnectionTestRouter() (*gin.Engine, *Handlers) {
 }
 
 func TestRequestConnection(t *testing.T) {
-	router, handlers := setupConnectionTestRouter()
+	router, _ := setupConnectionTestRouter() // Using _ to ignore the handlers variable
 
 	// 1. Test valid connection request
 	w := httptest.NewRecorder()
@@ -124,7 +124,7 @@ func TestRequestConnection(t *testing.T) {
 }
 
 func TestGetNonExistentConnection(t *testing.T) {
-	router, _ := setupConnectionTestRouter()
+	router, _ := setupConnectionTestRouter() // Using _ to ignore the handlers variable
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodGet, "/api/v1/connections/nonexistentid123456789012345678", nil)
@@ -139,7 +139,7 @@ func TestGetNonExistentConnection(t *testing.T) {
 }
 
 func TestUpdateNonExistentConnection(t *testing.T) {
-	router, _ := setupConnectionTestRouter()
+	router, _ := setupConnectionTestRouter() // Using _ to ignore the handlers variable
 
 	w := httptest.NewRecorder()
 	updateReq := map[string]interface{}{
