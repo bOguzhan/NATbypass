@@ -2,28 +2,37 @@
 package main
 
 import (
+	"fmt"
 	"net"
 	"os"
 
-	"github.com/sirupsen/logrus"
+	"github.com/bOguzhan/NATbypass/internal/config"
 )
 
 func main() {
-	log := logrus.New()
-	log.SetFormatter(&logrus.TextFormatter{
-		FullTimestamp: true,
-	})
-
-	log.Info("Starting Application Server...")
-
-	// Get port from environment or use default
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8081"
+	// Determine config path - default to configs/config.yaml
+	configPath := os.Getenv("CONFIG_PATH")
+	if configPath == "" {
+		configPath = "configs/config.yaml"
 	}
 
+	// Load configuration
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		fmt.Printf("Error loading configuration: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Configure logger
+	log := config.ConfigureLogger(cfg.Servers.Application.LogLevel)
+	log.Info("Starting Application Server...")
+
 	// Start UDP server
-	addr, err := net.ResolveUDPAddr("udp", ":"+port)
+	serverAddr := fmt.Sprintf("%s:%d",
+		cfg.Servers.Application.Host,
+		cfg.Servers.Application.Port)
+
+	addr, err := net.ResolveUDPAddr("udp", serverAddr)
 	if err != nil {
 		log.Fatalf("Failed to resolve address: %v", err)
 	}
@@ -34,7 +43,7 @@ func main() {
 	}
 	defer conn.Close()
 
-	log.Infof("Application Server listening on UDP port %s", port)
+	log.Infof("Application Server listening on UDP %s", serverAddr)
 
 	// Basic UDP packet handling loop
 	buffer := make([]byte, 1024)
