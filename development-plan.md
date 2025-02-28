@@ -21,12 +21,12 @@ This document outlines the step-by-step development plan for implementing the Pe
 
 ## Phase 2: Mediatory Server Implementation (Weeks 2-3)
 
-### Task 2.1: Basic HTTP Server
+### Task 2.1: Basic HTTP Server - Done
 - Implement HTTP server using Gin framework
 - Create basic health check and status endpoints
 - Set up middleware for logging, CORS, and security
 
-### Task 2.2: STUN Client Integration
+### Task 2.2: STUN Client Integration - Done
 - Integrate pion/stun library for NAT discovery
 - Implement functions to determine public IP and port
 - Create error handling and retry mechanisms for STUN operations
