@@ -4,6 +4,7 @@ package signaling
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/bOguzhan/NATbypass/internal/utils"
 	"github.com/gin-gonic/gin"
@@ -12,6 +13,7 @@ import (
 // Handlers encapsulates the HTTP handlers for the signaling server
 type Handlers struct {
 	logger *utils.Logger
+	server *Server // Reference to the server for client management
 }
 
 // NewHandlers creates a new instance of signaling handlers
@@ -21,11 +23,17 @@ func NewHandlers(logger *utils.Logger) *Handlers {
 	}
 }
 
+// SetServer sets the server reference
+func (h *Handlers) SetServer(server *Server) {
+	h.server = server
+}
+
 // RegisterClient handles client registration requests
 func (h *Handlers) RegisterClient(c *gin.Context) {
 	type RegisterRequest struct {
-		ClientID string `json:"client_id"`
-		Name     string `json:"name"`
+		ClientID   string            `json:"client_id"`
+		Name       string            `json:"name"`
+		Properties map[string]string `json:"properties"`
 	}
 
 	var req RegisterRequest
@@ -61,16 +69,29 @@ func (h *Handlers) RegisterClient(c *gin.Context) {
 		}
 	}
 
-	// TODO: Store client information in registry
+	// Store client information if server is available
+	if h.server != nil {
+		h.server.RegisterClient(clientID, ClientInfo{
+			ID:         clientID,
+			Name:       req.Name,
+			IPAddress:  c.ClientIP(),
+			LastSeen:   time.Now(),
+			UserAgent:  c.Request.UserAgent(),
+			IsOnline:   true,
+			Properties: req.Properties,
+		})
+	}
 
 	h.logger.WithFields(map[string]interface{}{
 		"client_id": clientID,
 		"name":      req.Name,
+		"ip":        c.ClientIP(),
 	}).Info("Client registered")
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":    "registered",
 		"client_id": clientID,
+		"timestamp": time.Now(),
 	})
 }
 
@@ -87,9 +108,39 @@ func (h *Handlers) GetPublicAddress(c *gin.Context) {
 	}).Debug("Public address requested")
 
 	c.JSON(http.StatusOK, gin.H{
-		"status": "success",
-		"ip":     clientIP,
-		// Port will be added when STUN is implemented
+		"status":    "success",
+		"ip":        clientIP,
+		"timestamp": time.Now(),
+	})
+}
+
+// Heartbeat handles client heartbeat to keep connection alive
+func (h *Handlers) Heartbeat(c *gin.Context) {
+	type HeartbeatRequest struct {
+		ClientID string `json:"client_id"`
+	}
+
+	var req HeartbeatRequest
+	if err := c.ShouldBindJSON(&req); err != nil || req.ClientID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  "invalid_request",
+		})
+		return
+	}
+
+	// Update client last seen time if server is available
+	if h.server != nil {
+		if info, exists := h.server.GetClient(req.ClientID); exists {
+			info.LastSeen = time.Now()
+			info.IsOnline = true
+			h.server.RegisterClient(req.ClientID, info) // Update info
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":    "ok",
+		"timestamp": time.Now(),
 	})
 }
 
@@ -100,6 +151,7 @@ func (h *Handlers) SetupRoutes(router *gin.Engine) {
 	{
 		v1.POST("/register", h.RegisterClient)
 		v1.GET("/address", h.GetPublicAddress)
+		v1.POST("/heartbeat", h.Heartbeat)
 
 		// Client connections endpoints - will be implemented later
 		v1.POST("/connect", func(c *gin.Context) {
@@ -111,12 +163,20 @@ func (h *Handlers) SetupRoutes(router *gin.Engine) {
 		})
 	}
 
+	// Version info
+	router.GET("/version", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"version": "0.1.0",
+			"name":    "mediatory-server",
+		})
+	})
+
 	// Health check endpoint
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"status":  "ok",
 			"service": "mediatory-server",
-			"version": "0.1.0",
+			"time":    time.Now(),
 		})
 	})
 }

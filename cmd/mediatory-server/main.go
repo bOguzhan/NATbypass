@@ -2,10 +2,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/bOguzhan/NATbypass/internal/config"
 	"github.com/bOguzhan/NATbypass/internal/signaling"
@@ -38,44 +41,20 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	// Set up Gin router
-	router := gin.New()
-	router.Use(gin.Recovery())
+	// Create and configure server
+	server := signaling.NewServer(logger)
 
-	// Add custom logger middleware
-	router.Use(func(c *gin.Context) {
-		path := c.Request.URL.Path
-		method := c.Request.Method
-
-		logger.WithFields(map[string]interface{}{
-			"method": method,
-			"path":   path,
-			"client": c.ClientIP(),
-		}).Info("Request")
-
-		c.Next()
-
-		logger.WithFields(map[string]interface{}{
-			"method": method,
-			"path":   path,
-			"status": c.Writer.Status(),
-		}).Debug("Response")
-	})
-
-	// Set up the signaling handlers
-	handlers := signaling.NewHandlers(logger)
-	handlers.SetupRoutes(router)
-
-	// Start HTTP server
+	// Start HTTP server in a goroutine
 	serverAddr := fmt.Sprintf("%s:%d",
 		cfg.Servers.Mediatory.Host,
 		cfg.Servers.Mediatory.Port)
 
-	// Setup graceful shutdown
 	go func() {
 		logger.Infof("Mediatory Server listening on %s", serverAddr)
-		if err := router.Run(serverAddr); err != nil {
-			logger.Fatalf("Failed to start server: %v", err)
+		if err := server.Start(serverAddr); err != nil {
+			if err != http.ErrServerClosed {
+				logger.Fatalf("Failed to start server: %v", err)
+			}
 		}
 	}()
 
@@ -85,4 +64,15 @@ func main() {
 	<-quit
 
 	logger.Info("Shutting down server...")
+
+	// Create a context with timeout for shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Gracefully shutdown the server
+	if err := server.Shutdown(ctx); err != nil {
+		logger.Errorf("Server forced to shutdown: %v", err)
+	}
+
+	logger.Info("Server exited")
 }
