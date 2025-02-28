@@ -9,20 +9,25 @@ import (
 	"github.com/bOguzhan/NATbypass/internal/config"
 	"github.com/bOguzhan/NATbypass/internal/utils"
 	"github.com/bOguzhan/NATbypass/pkg/networking"
+	"github.com/bOguzhan/NATbypass/pkg/protocol"
 	"github.com/gin-gonic/gin"
 )
 
 // Handlers encapsulates the HTTP handlers for the signaling server
 type Handlers struct {
-	logger *utils.Logger
-	server *Server // Reference to the server for client management
-	config *config.Config
+	logger      *utils.Logger
+	server      *Server // Reference to the server for client management
+	config      *config.Config
+	connections *ConnectionRegistry // Add this field
+	messages    *MessageQueue       // Add this field
 }
 
 // NewHandlers creates a new instance of signaling handlers
 func NewHandlers(logger *utils.Logger) *Handlers {
 	return &Handlers{
-		logger: logger,
+		logger:      logger,
+		connections: NewConnectionRegistry(logger),
+		messages:    NewMessageQueue(logger),
 	}
 }
 
@@ -209,8 +214,80 @@ func (h *Handlers) Heartbeat(c *gin.Context) {
 	})
 }
 
+// PollMessages retrieves any pending messages for a client
+func (h *Handlers) PollMessages(c *gin.Context) {
+	clientID := c.Param("client_id")
+
+	if !utils.ValidateID(clientID, 32) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  "invalid_client_id",
+		})
+		return
+	}
+
+	// Get and clear messages for this client
+	messages := h.messages.GetMessages(clientID)
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":   "success",
+		"messages": messages,
+		"count":    len(messages),
+	})
+}
+
+// SendSignal handles sending signaling messages between clients
+func (h *Handlers) SendSignal(c *gin.Context) {
+	var message protocol.Message
+	if err := c.ShouldBindJSON(&message); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  "invalid_message_format",
+		})
+		return
+	}
+
+	// Validate required fields
+	if message.ClientID == "" || message.TargetID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  "missing_client_ids",
+		})
+		return
+	}
+
+	// Validate message type
+	switch message.Type {
+	case protocol.TypeOffer, protocol.TypeAnswer, protocol.TypeICECandidate, protocol.TypeKeepAlive:
+		// Valid message types
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  "invalid_message_type",
+		})
+		return
+	}
+
+	// Queue the message for the target client
+	h.messages.AddMessage(message.TargetID, message)
+
+	h.logger.WithFields(map[string]interface{}{
+		"from": message.ClientID,
+		"to":   message.TargetID,
+		"type": message.Type,
+	}).Info("Signal message queued")
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":    "message_queued",
+		"timestamp": time.Now(),
+	})
+}
+
 // SetupRoutes configures all the routes for the signaling server
 func (h *Handlers) SetupRoutes(router *gin.Engine) {
+	// Initialize connection handlers if needed
+	h.InitConnectionHandlers()
+
 	// API v1 group
 	v1 := router.Group("/api/v1")
 	{
@@ -218,14 +295,11 @@ func (h *Handlers) SetupRoutes(router *gin.Engine) {
 		v1.GET("/address", h.GetPublicAddress)
 		v1.POST("/heartbeat", h.Heartbeat)
 
-		// Client connections endpoints - will be implemented later
-		v1.POST("/connect", func(c *gin.Context) {
-			c.JSON(http.StatusNotImplemented, gin.H{"status": "not_implemented"})
-		})
-
-		v1.POST("/signal", func(c *gin.Context) {
-			c.JSON(http.StatusNotImplemented, gin.H{"status": "not_implemented"})
-		})
+		// Add new connection endpoints
+		v1.POST("/connect", h.RequestConnection)
+		v1.GET("/connections/:client_id", h.GetActiveConnections)
+		v1.POST("/signal", h.SendSignal)
+		v1.GET("/messages/:client_id", h.PollMessages)
 	}
 
 	// Version info

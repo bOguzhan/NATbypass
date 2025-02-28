@@ -38,15 +38,24 @@ func NewServer(logger *utils.Logger) *Server {
 	router := gin.New()
 	router.Use(gin.Recovery())
 
+	// Create handlers with logger
+	handlers := NewHandlers(logger)
+
 	server := &Server{
 		router:   router,
 		logger:   logger,
-		handlers: NewHandlers(logger),
+		handlers: handlers,
 		clients:  make(map[string]ClientInfo),
 	}
 
+	// Set server reference in handlers
+	handlers.SetServer(server)
+
 	// Configure routes
 	server.setupRoutes()
+
+	// Start cleanup goroutines
+	go server.startCleanupTasks()
 
 	return server
 }
@@ -160,4 +169,37 @@ func (s *Server) RemoveClient(id string) {
 // GetHandlers returns the server's handlers
 func (s *Server) GetHandlers() *Handlers {
 	return s.handlers
+}
+
+// startCleanupTasks starts regular cleanup tasks
+func (s *Server) startCleanupTasks() {
+	// Start a ticker for regular cleanup operations
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		// Clean up stale connections
+		connectionCount := s.handlers.connections.CleanupStaleConnections(30 * time.Minute)
+
+		// Clean up old messages
+		messageCount := s.handlers.messages.CleanupOldMessages(10 * time.Minute)
+
+		// Clean up inactive clients
+		s.mu.Lock()
+		cutoff := time.Now().Add(-30 * time.Minute)
+		clientCount := 0
+
+		for id, client := range s.clients {
+			if client.LastSeen.Before(cutoff) {
+				delete(s.clients, id)
+				clientCount++
+			}
+		}
+		s.mu.Unlock()
+
+		if connectionCount > 0 || messageCount > 0 || clientCount > 0 {
+			s.logger.Infof("Cleaned up %d connections, %d messages, and %d clients",
+				connectionCount, messageCount, clientCount)
+		}
+	}
 }
