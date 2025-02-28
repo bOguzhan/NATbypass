@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/bOguzhan/NATbypass/internal/utils"
-	"github.com/bOguzhan/NATbypass/pkg/protocol"
 	"github.com/gin-gonic/gin"
 )
 
@@ -245,54 +244,5 @@ func (h *Handlers) GetActiveConnections(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status":      "success",
 		"connections": response,
-	})
-}
-
-// SendSignal relays signaling messages between clients
-func (h *Handlers) SendSignal(c *gin.Context) {
-	var message protocol.Message
-	if err := c.ShouldBindJSON(&message); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"status": "error",
-			"error":  "invalid_message_format",
-		})
-		return
-	}
-
-	// Validate required fields
-	if message.ClientID == "" || message.TargetID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"status": "error",
-			"error":  "missing_client_ids",
-		})
-		return
-	}
-
-	// Validate message type
-	switch message.Type {
-	case protocol.TypeOffer, protocol.TypeAnswer, protocol.TypeICECandidate, protocol.TypeKeepAlive:
-		// Valid message types
-	default:
-		c.JSON(http.StatusBadRequest, gin.H{
-			"status": "error",
-			"error":  "invalid_message_type",
-		})
-		return
-	}
-
-	// Store the message for the target client to retrieve
-	// In a real implementation, this would use a message queue or WebSocket
-	h.logger.WithFields(map[string]interface{}{
-		"from":    message.ClientID,
-		"to":      message.TargetID,
-		"type":    message.Type,
-		"payload": string(message.Payload),
-	}).Info("Signal message received")
-
-	// For now, we'll return a success response
-	// In a real implementation, you would deliver this to the target
-	c.JSON(http.StatusOK, gin.H{
-		"status":    "message_queued",
-		"timestamp": time.Now(),
 	})
 }
