@@ -11,31 +11,64 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// ConnectionStatus represents the current state of a connection
+type ConnectionStatus string
+
+const (
+	// StatusInitiated indicates a connection request has been initiated
+	StatusInitiated ConnectionStatus = "initiated"
+
+	// StatusNegotiating indicates peers are exchanging connection information
+	StatusNegotiating ConnectionStatus = "negotiating"
+
+	// StatusEstablished indicates the connection has been successfully established
+	StatusEstablished ConnectionStatus = "established"
+
+	// StatusFailed indicates the connection attempt failed
+	StatusFailed ConnectionStatus = "failed"
+
+	// StatusClosed indicates the connection was established but is now closed
+	StatusClosed ConnectionStatus = "closed"
+)
+
 // ConnectionRequest represents a request to connect to another peer
 type ConnectionRequest struct {
-	SourceID      string    `json:"source_id"`
-	TargetID      string    `json:"target_id"`
-	Timestamp     time.Time `json:"timestamp"`
-	ConnectionID  string    `json:"connection_id"`
-	SourceAddress string    `json:"source_address,omitempty"`
-	TargetAddress string    `json:"target_address,omitempty"`
+	SourceID      string                 `json:"source_id"`
+	TargetID      string                 `json:"target_id"`
+	Timestamp     time.Time              `json:"timestamp"`
+	ConnectionID  string                 `json:"connection_id"`
+	SourceAddress string                 `json:"source_address,omitempty"`
+	TargetAddress string                 `json:"target_address,omitempty"`
+	Status        ConnectionStatus       `json:"status"`
+	LastUpdated   time.Time              `json:"last_updated"`
+	ErrorMessage  string                 `json:"error_message,omitempty"`
+	Metadata      map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // ConnectionRegistry manages active connection requests between clients.
 // It provides thread-safe operations for storing, retrieving, and removing
 // connection requests between peers.
 type ConnectionRegistry struct {
-	mu          sync.RWMutex
-	connections map[string]*ConnectionRequest
-	logger      *utils.Logger
+	mu              sync.RWMutex
+	connections     map[string]*ConnectionRequest
+	logger          *utils.Logger
+	cleanupInterval time.Duration
+	stopCleanup     chan struct{}
 }
 
 // NewConnectionRegistry creates a new connection registry
 func NewConnectionRegistry(logger *utils.Logger) *ConnectionRegistry {
-	return &ConnectionRegistry{
-		connections: make(map[string]*ConnectionRequest),
-		logger:      logger,
+	registry := &ConnectionRegistry{
+		connections:     make(map[string]*ConnectionRequest),
+		logger:          logger,
+		cleanupInterval: 5 * time.Minute,
+		stopCleanup:     make(chan struct{}),
 	}
+
+	// Start background cleanup routine
+	go registry.startPeriodicCleanup()
+
+	return registry
 }
 
 // RegisterConnection adds a new connection request to the registry
@@ -51,16 +84,93 @@ func (r *ConnectionRegistry) RegisterConnection(req *ConnectionRequest) error {
 		}
 	}
 
-	req.Timestamp = time.Now()
+	if req.Status == "" {
+		req.Status = StatusInitiated
+	}
+
+	now := time.Now()
+	req.Timestamp = now
+	req.LastUpdated = now
+
+	if req.Metadata == nil {
+		req.Metadata = make(map[string]interface{})
+	}
+
 	r.connections[req.ConnectionID] = req
 
 	r.logger.WithFields(map[string]interface{}{
 		"connection_id": req.ConnectionID,
 		"source_id":     req.SourceID,
 		"target_id":     req.TargetID,
+		"status":        req.Status,
 	}).Info("Connection registered")
 
 	return nil
+}
+
+// UpdateConnectionStatus updates the status of a connection
+func (r *ConnectionRegistry) UpdateConnectionStatus(connectionID string, status ConnectionStatus) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	conn, exists := r.connections[connectionID]
+	if !exists {
+		return false
+	}
+
+	conn.Status = status
+	conn.LastUpdated = time.Now()
+
+	r.logger.WithFields(map[string]interface{}{
+		"connection_id": connectionID,
+		"source_id":     conn.SourceID,
+		"target_id":     conn.TargetID,
+		"status":        status,
+	}).Info("Connection status updated")
+
+	return true
+}
+
+// UpdateConnectionError sets an error message for a connection
+func (r *ConnectionRegistry) UpdateConnectionError(connectionID string, errorMsg string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	conn, exists := r.connections[connectionID]
+	if !exists {
+		return false
+	}
+
+	conn.Status = StatusFailed
+	conn.ErrorMessage = errorMsg
+	conn.LastUpdated = time.Now()
+
+	r.logger.WithFields(map[string]interface{}{
+		"connection_id": connectionID,
+		"error":         errorMsg,
+	}).Info("Connection marked as failed")
+
+	return true
+}
+
+// UpdateConnectionMetadata adds or updates metadata for a connection
+func (r *ConnectionRegistry) UpdateConnectionMetadata(connectionID string, key string, value interface{}) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	conn, exists := r.connections[connectionID]
+	if !exists {
+		return false
+	}
+
+	if conn.Metadata == nil {
+		conn.Metadata = make(map[string]interface{})
+	}
+
+	conn.Metadata[key] = value
+	conn.LastUpdated = time.Now()
+
+	return true
 }
 
 // GetConnection retrieves a connection request by ID
@@ -85,8 +195,22 @@ func (r *ConnectionRegistry) GetConnectionsByClient(clientID string) []*Connecti
 	return result
 }
 
+// GetConnectionsByStatus returns all connections with the specified status
+func (r *ConnectionRegistry) GetConnectionsByStatus(status ConnectionStatus) []*ConnectionRequest {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var result []*ConnectionRequest
+	for _, conn := range r.connections {
+		if conn.Status == status {
+			result = append(result, conn)
+		}
+	}
+	return result
+}
+
 // RemoveConnection removes a connection from the registry
-func (r *ConnectionRegistry) RemoveConnection(connectionID string) {
+func (r *ConnectionRegistry) RemoveConnection(connectionID string) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -95,7 +219,9 @@ func (r *ConnectionRegistry) RemoveConnection(connectionID string) {
 		r.logger.WithFields(map[string]interface{}{
 			"connection_id": connectionID,
 		}).Info("Connection removed")
+		return true
 	}
+	return false
 }
 
 // CleanupStaleConnections removes connections older than the specified duration
@@ -107,9 +233,26 @@ func (r *ConnectionRegistry) CleanupStaleConnections(maxAge time.Duration) int {
 	count := 0
 
 	for id, conn := range r.connections {
-		if conn.Timestamp.Before(cutoff) {
-			delete(r.connections, id)
-			count++
+		// Different cleanup policies based on connection status
+		switch conn.Status {
+		case StatusEstablished:
+			// For established connections, check last updated time instead of created time
+			if conn.LastUpdated.Before(cutoff) {
+				delete(r.connections, id)
+				count++
+			}
+		case StatusFailed, StatusClosed:
+			// Failed or closed connections are removed more aggressively (after 1 hour)
+			if conn.LastUpdated.Before(time.Now().Add(-1 * time.Hour)) {
+				delete(r.connections, id)
+				count++
+			}
+		default:
+			// For other statuses (initiated, negotiating), use the original timestamp
+			if conn.Timestamp.Before(cutoff) {
+				delete(r.connections, id)
+				count++
+			}
 		}
 	}
 
@@ -120,26 +263,57 @@ func (r *ConnectionRegistry) CleanupStaleConnections(maxAge time.Duration) int {
 	return count
 }
 
+// startPeriodicCleanup runs a periodic task to clean up stale connections
+func (r *ConnectionRegistry) startPeriodicCleanup() {
+	ticker := time.NewTicker(r.cleanupInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			// Remove connections older than 30 minutes
+			r.CleanupStaleConnections(30 * time.Minute)
+		case <-r.stopCleanup:
+			return
+		}
+	}
+}
+
+// Stop halts the background cleanup routine
+func (r *ConnectionRegistry) Stop() {
+	close(r.stopCleanup)
+}
+
+// GetConnectionStats returns statistics about the connections
+func (r *ConnectionRegistry) GetConnectionStats() map[string]int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	stats := map[string]int{
+		"total":       len(r.connections),
+		"initiated":   0,
+		"negotiating": 0,
+		"established": 0,
+		"failed":      0,
+		"closed":      0,
+	}
+
+	for _, conn := range r.connections {
+		if count, exists := stats[string(conn.Status)]; exists {
+			stats[string(conn.Status)] = count + 1
+		}
+	}
+
+	return stats
+}
+
 // Add connection handling methods to the Handlers type
 func (h *Handlers) InitConnectionHandlers() {
 	// Create connection registry if it doesn't exist
 	if h.connections == nil {
 		h.connections = NewConnectionRegistry(h.logger)
-
-		// Start a periodic cleanup goroutine
-		go func() {
-			ticker := time.NewTicker(5 * time.Minute)
-			defer ticker.Stop()
-
-			for range ticker.C {
-				h.connections.CleanupStaleConnections(30 * time.Minute)
-			}
-		}()
 	}
 }
-
-// Add this field to the Handlers type in handlers.go
-// connections *ConnectionRegistry
 
 // RequestConnection initiates a connection request to another client
 func (h *Handlers) RequestConnection(c *gin.Context) {
@@ -191,6 +365,7 @@ func (h *Handlers) RequestConnection(c *gin.Context) {
 	connReq := &ConnectionRequest{
 		SourceID:  req.SourceID,
 		TargetID:  req.TargetID,
+		Status:    StatusInitiated,
 		Timestamp: time.Now(),
 	}
 
@@ -238,7 +413,9 @@ func (h *Handlers) GetActiveConnections(c *gin.Context) {
 			"connection_id": conn.ConnectionID,
 			"source_id":     conn.SourceID,
 			"target_id":     conn.TargetID,
+			"status":        conn.Status,
 			"timestamp":     conn.Timestamp,
+			"last_updated":  conn.LastUpdated,
 			"is_initiator":  conn.SourceID == clientID,
 		})
 	}
@@ -246,5 +423,43 @@ func (h *Handlers) GetActiveConnections(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status":      "success",
 		"connections": response,
+	})
+}
+
+// Add a new handler for updating connection status
+func (h *Handlers) UpdateConnectionStatus(c *gin.Context) {
+	var req struct {
+		ConnectionID string           `json:"connection_id" binding:"required"`
+		Status       ConnectionStatus `json:"status" binding:"required"`
+		ErrorMessage string           `json:"error_message,omitempty"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  "invalid_request",
+			"detail": err.Error(),
+		})
+		return
+	}
+
+	success := false
+	if req.ErrorMessage != "" {
+		success = h.connections.UpdateConnectionError(req.ConnectionID, req.ErrorMessage)
+	} else {
+		success = h.connections.UpdateConnectionStatus(req.ConnectionID, req.Status)
+	}
+
+	if !success {
+		c.JSON(http.StatusNotFound, gin.H{
+			"status": "error",
+			"error":  "connection_not_found",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":        "updated",
+		"connection_id": req.ConnectionID,
 	})
 }

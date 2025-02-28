@@ -31,7 +31,7 @@ This document outlines the step-by-step development plan for implementing the Pe
 - Implement functions to determine public IP and port
 - Create error handling and retry mechanisms for STUN operations
 
-### Task 2.3: Signaling API Development - Testing
+### Task 2.3: Signaling API Development - Done
 - Design and implement REST API endpoints for client signaling
 - Create handlers for client registration and discovery
 - Implement connection request routing between clients

@@ -136,6 +136,12 @@ func (s *Server) Start(address string) error {
 // Shutdown gracefully stops the server
 func (s *Server) Shutdown(ctx context.Context) error {
 	s.logger.Info("Shutting down HTTP server")
+
+	// Stop the connection registry cleanup routine
+	if s.handlers != nil && s.handlers.connections != nil {
+		s.handlers.connections.Stop()
+	}
+
 	return s.server.Shutdown(ctx)
 }
 

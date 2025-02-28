@@ -300,6 +300,7 @@ func (h *Handlers) SetupRoutes(router *gin.Engine) {
 		v1.GET("/connections/:client_id", h.GetActiveConnections)
 		v1.POST("/signal", h.SendSignal)
 		v1.GET("/messages/:client_id", h.PollMessages)
+		v1.POST("/connection/update", h.UpdateConnectionStatus) // Add this line
 	}
 
 	// Version info
