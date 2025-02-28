@@ -1,22 +1,17 @@
-# Server configurations
+# configs/config.yaml
 servers:
   mediatory:
     port: 8080
     host: "0.0.0.0"
     log_level: "info"
-  
   application:
-    port: 8081
+    port: 9000
     host: "0.0.0.0"
     log_level: "info"
-
-# STUN server configuration
 stun:
   server: "stun.l.google.com:19302"
   timeout_seconds: 5
   retry_count: 3
-
-# Connection parameters
 connection:
   hole_punch_attempts: 5
   hole_punch_timeout_ms: 500

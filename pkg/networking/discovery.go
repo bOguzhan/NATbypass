@@ -2,6 +2,7 @@
 package networking
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"time"
@@ -33,47 +34,77 @@ func DiscoverPublicAddressWithConfig(config STUNConfig) (*PublicAddress, error) 
 		config.RetryCount = 3
 	}
 
-	// Set timeout
-	timeout := time.Duration(config.TimeoutSeconds) * time.Second
-
-	// Create a STUN client with timeout
-	c, err := stun.Dial("udp", config.Server)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to STUN server: %w", err)
-	}
-	defer c.Close()
-
-	// Set timeout on the connection
-	c.SetDeadline(time.Now().Add(timeout))
+	// Create context with timeout for the whole operation
+	ctx, cancel := context.WithTimeout(
+		context.Background(),
+		time.Duration(config.TimeoutSeconds)*time.Second,
+	)
+	defer cancel()
 
 	// Try multiple times if needed
 	var lastErr error
 	for i := 0; i < config.RetryCount; i++ {
-		message := stun.MustBuild(stun.TransactionID, stun.BindingRequest)
-
-		var xorAddr stun.XORMappedAddress
-		err = c.Do(message, func(res stun.Event) {
-			if res.Error != nil {
-				lastErr = res.Error
-				return
-			}
-
-			if err := xorAddr.GetFrom(res.Message); err != nil {
-				lastErr = err
-				return
-			}
-		})
-
-		if err == nil && lastErr == nil {
-			return &PublicAddress{
-				IP:   xorAddr.IP,
-				Port: xorAddr.Port,
-			}, nil
+		// Create a STUN client
+		c, err := stun.Dial("udp", config.Server)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to connect to STUN server: %w", err)
+			time.Sleep(500 * time.Millisecond)
+			continue
 		}
 
-		// If we failed, sleep briefly before retrying
-		if i < config.RetryCount-1 {
+		// Don't defer here as we want to close before the next iteration
+		// Create a channel to receive the STUN response
+		responseChan := make(chan interface{}, 1)
+
+		// Create message with transaction ID
+		message := stun.MustBuild(stun.TransactionID, stun.BindingRequest)
+
+		// Send the STUN request with a callback
+		if err := c.Do(message, func(res stun.Event) {
+			if res.Error != nil {
+				responseChan <- res.Error
+				return
+			}
+
+			var xorAddr stun.XORMappedAddress
+			if err := xorAddr.GetFrom(res.Message); err != nil {
+				responseChan <- err
+				return
+			}
+
+			responseChan <- &PublicAddress{
+				IP:   xorAddr.IP,
+				Port: xorAddr.Port,
+			}
+		}); err != nil {
+			lastErr = err
+			c.Close()
 			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+
+		// Wait for the response or timeout
+		select {
+		case resp := <-responseChan:
+			c.Close() // Close connection after getting response
+
+			// Check if we got an error
+			if err, ok := resp.(error); ok {
+				lastErr = err
+				time.Sleep(500 * time.Millisecond)
+				continue
+			}
+
+			// Check if we got an address
+			if addr, ok := resp.(*PublicAddress); ok {
+				return addr, nil
+			}
+
+		case <-ctx.Done():
+			// Timeout occurred
+			c.Close()
+			lastErr = ctx.Err()
+			break
 		}
 	}
 

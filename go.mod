@@ -7,6 +7,7 @@ require (
 	github.com/gin-gonic/gin v1.9.1
 	github.com/pion/stun v0.6.1
 	github.com/sirupsen/logrus v1.9.3
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -37,5 +38,4 @@ require (
 	golang.org/x/sys v0.8.0 // indirect
 	golang.org/x/text v0.9.0 // indirect
 	google.golang.org/protobuf v1.30.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

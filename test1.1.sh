@@ -38,41 +38,16 @@ go build -o bin/application-server cmd/application-server/main.go
 echo "✓ Application server built successfully"
 echo ""
 
-# Create test directory if it doesn't exist
-mkdir -p test
-
-# Create a simple test program for STUN discovery
-cat > test/main.go <<EOL
-package main
-
-import (
-    "fmt"
-    "log"
-    "github.com/bOguzhan/NATbypass/pkg/networking"
-)
-
-func main() {
-    log.Println("Testing STUN discovery...")
-    
-    // Use Google's public STUN server
-    stunServer := "stun.l.google.com:19302"
-    
-    addr, err := networking.DiscoverPublicAddress(stunServer)
-    if err != nil {
-        log.Fatalf("Failed to discover public address: %v", err)
-    }
-    
-    fmt.Printf("Your public IP is: %s\n", addr.IP.String())
-    fmt.Printf("Your public port is: %d\n", addr.Port)
-}
-EOL
-
-echo "✓ Created STUN test program"
+# Build the STUN test utility
+echo "Building STUN test program..."
+go build -o bin/stun_test test/main.go  # Changed from test/stun_test.go to test/main.go
+echo "✓ STUN test program built successfully"
 echo ""
 
-# Build and run STUN test program
-echo "Building and running STUN test..."
-go build -o bin/stun_test test/stun_test.go
+# Test loading configuration
+echo "Testing configuration system..."
+go test -v ./test/config
+echo "✓ Configuration system test passed"
 echo ""
 
 # Start the mediatory server in the background
@@ -87,9 +62,16 @@ sleep 2
 
 # Test the mediatory server's health endpoint
 echo "Testing mediatory server health endpoint..."
-curl -s http://localhost:8080/health
-echo ""
-echo "✓ Mediatory server health check passed"
+HEALTH_RESPONSE=$(curl -s http://localhost:8080/health)
+if [[ $HEALTH_RESPONSE == *"\"status\":\"ok\""* ]]; then
+    echo "✓ Mediatory server health check passed"
+else
+    echo "✗ Mediatory server health check failed"
+    echo "Response: $HEALTH_RESPONSE"
+    # Kill the server before exiting
+    kill $MEDIATORY_PID 2>/dev/null || true
+    exit 1
+fi
 echo ""
 
 # Kill the mediatory server
@@ -100,4 +82,5 @@ echo ""
 
 echo "=== All tests completed successfully! ==="
 echo "You can now run the STUN test manually with: bin/stun_test"
+echo "Run the integrated test suite with: go test ./..."
 echo ""
