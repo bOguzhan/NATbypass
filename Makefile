@@ -37,3 +37,7 @@ run-mediatory: build-mediatory
 run-application: build-application
 	@echo "Running application server..."
 	./$(BUILD_DIR)/application-server
+
+test-config:
+    @echo "Testing configuration system..."
+    $(GO) test -v ./test/config_test.go
