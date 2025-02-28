@@ -156,3 +156,8 @@ func (s *Server) RemoveClient(id string) {
 	delete(s.clients, id)
 	s.logger.Infof("Client removed: %s", id)
 }
+
+// GetHandlers returns the server's handlers
+func (s *Server) GetHandlers() *Handlers {
+	return s.handlers
+}

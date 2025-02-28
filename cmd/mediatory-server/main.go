@@ -47,6 +47,7 @@ func main() {
 	// Create handlers and set server reference
 	handlers := server.GetHandlers()
 	handlers.SetServer(server)
+	handlers.SetConfig(cfg) // Set the configuration
 
 	// Start HTTP server in a goroutine
 	serverAddr := fmt.Sprintf("%s:%d",

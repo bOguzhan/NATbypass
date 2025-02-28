@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/bOguzhan/NATbypass/internal/config"
 	"github.com/bOguzhan/NATbypass/internal/utils"
 	"github.com/bOguzhan/NATbypass/pkg/networking"
 	"github.com/gin-gonic/gin"
@@ -15,7 +16,7 @@ import (
 type Handlers struct {
 	logger *utils.Logger
 	server *Server // Reference to the server for client management
-	config *utils.Config
+	config *config.Config
 }
 
 // NewHandlers creates a new instance of signaling handlers
@@ -31,8 +32,8 @@ func (h *Handlers) SetServer(server *Server) {
 }
 
 // SetConfig sets the configuration reference
-func (h *Handlers) SetConfig(config *utils.Config) {
-	h.config = config
+func (h *Handlers) SetConfig(cfg *config.Config) {
+	h.config = cfg
 }
 
 // RegisterClient handles client registration requests
@@ -110,6 +111,11 @@ func (h *Handlers) GetPublicAddress(c *gin.Context) {
 	// Use STUN to determine actual public address
 	stunServer := "stun.l.google.com:19302" // Default STUN server
 
+	// Use config if available
+	if h.config != nil && h.config.Stun.Server != "" {
+		stunServer = h.config.Stun.Server
+	}
+
 	h.logger.Debug("Attempting STUN discovery for client address")
 
 	// Create STUN config
@@ -117,6 +123,12 @@ func (h *Handlers) GetPublicAddress(c *gin.Context) {
 		Server:         stunServer,
 		TimeoutSeconds: 5,
 		RetryCount:     3,
+	}
+
+	// Use config values if available
+	if h.config != nil {
+		stunConfig.TimeoutSeconds = h.config.Stun.TimeoutSeconds
+		stunConfig.RetryCount = h.config.Stun.RetryCount
 	}
 
 	addr, err := networking.DiscoverPublicAddressWithConfig(stunConfig)
