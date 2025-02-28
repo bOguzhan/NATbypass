@@ -40,8 +40,8 @@ This project implements a **Peer-to-Peer NAT Traversal** system with minimal ser
 ### 1. Clone the repository:
 
 ```bash
-git clone https://github.com/yourusername/peer-to-peer-nat-traversal.git
-cd peer-to-peer-nat-traversal
+git clone https://github.com/bOguzhan/NATbypass
+cd NATbypass
 ```
 2. Set up the Mediatory Server (Signaling Server)
 
