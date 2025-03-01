@@ -1,3 +1,4 @@
+DISCLAIMER. THIS CODE IN THIS PROJECT IS %100 WRITTEN BY CLAUDE 3.7 ON COPILOT ON VSCODE. (this sentence is written by me)
 # NATbypass: Multi-Protocol P2P NAT Traversal System
 
 A peer-to-peer NAT traversal system that enables direct client-to-client communication through UDP and TCP protocols with minimal server involvement.
