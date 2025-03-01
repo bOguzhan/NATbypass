@@ -2,83 +2,105 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"net"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 
 	"github.com/bOguzhan/NATbypass/internal/config"
+	"github.com/bOguzhan/NATbypass/internal/nat"
 )
 
 func main() {
-	// Determine config path - default to configs/config.yaml
-	configPath := os.Getenv("CONFIG_PATH")
-	if configPath == "" {
-		configPath = "configs/config.yaml"
-	}
-
 	// Load configuration
-	cfg, err := config.LoadConfig(configPath)
+	cfg, err := config.LoadConfig("configs/config.yaml")
 	if err != nil {
-		fmt.Printf("Error loading configuration: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Configure logger
-	log := config.ConfigureLogger(cfg.Servers.Application.LogLevel)
-	log.Info("Starting Application Server...")
-
-	// Start UDP server
-	serverAddr := fmt.Sprintf("%s:%d",
-		cfg.Servers.Application.Host,
-		cfg.Servers.Application.Port)
-
-	addr, err := net.ResolveUDPAddr("udp", serverAddr)
+	// Setup logger
+	logger := logrus.New()
+	logLevel, err := logrus.ParseLevel(cfg.Servers.Application.LogLevel)
 	if err != nil {
-		log.Fatalf("Failed to resolve address: %v", err)
+		logLevel = logrus.InfoLevel
 	}
+	logger.SetLevel(logLevel)
+	logger.SetFormatter(&logrus.TextFormatter{
+		FullTimestamp: true,
+	})
 
-	conn, err := net.ListenUDP("udp", addr)
-	if err != nil {
-		log.Fatalf("Failed to start UDP server: %v", err)
+	// Setup HTTP server
+	router := gin.Default()
+	addr := fmt.Sprintf("%s:%d", cfg.Servers.Application.Host, cfg.Servers.Application.Port)
+
+	// Setup routes
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "ok",
+			"server": "application",
+		})
+	})
+
+	// Create context that can be canceled
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Setup TCP server
+	tcpConfig := &config.TCPServerConfig{
+		Host:              cfg.Servers.TCP.Host,
+		Port:              cfg.Servers.TCP.Port,
+		ConnectionTimeout: cfg.Servers.TCP.ConnectionTimeout,
+		MaxConnections:    cfg.Servers.TCP.MaxConnections,
+		BufferSize:        cfg.Servers.TCP.BufferSize,
 	}
-	defer conn.Close()
+	tcpServer := nat.NewTCPServer(tcpConfig, logger)
 
-	log.Infof("Application Server listening on UDP %s", serverAddr)
-
-	// Initialize and start TCP server
-	tcpServer := nat.NewTCPServer(&config.TCPServerConfig{
-		Host:              appConfig.TCP.Host,
-		Port:              appConfig.TCP.Port,
-		ConnectionTimeout: appConfig.TCP.ConnectionTimeout,
-		MaxConnections:    appConfig.TCP.MaxConnections,
-		BufferSize:        appConfig.TCP.BufferSize,
-	}, logger)
-
+	// Start TCP server
+	logger.Info("Starting TCP server...")
 	if err := tcpServer.Start(ctx); err != nil {
 		logger.Fatalf("Failed to start TCP server: %v", err)
 	}
 
-	// Add TCP server to graceful shutdown
-	defer func() {
-		if err := tcpServer.Stop(); err != nil {
-			logger.Errorf("Error stopping TCP server: %v", err)
+	// Setup server graceful shutdown
+	srv := &http.Server{
+		Addr:    addr,
+		Handler: router,
+	}
+
+	// Start HTTP server in a goroutine
+	go func() {
+		logger.Infof("Starting application server on %s", addr)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Fatalf("Failed to start server: %v", err)
 		}
 	}()
 
-	// Basic UDP packet handling loop
-	buffer := make([]byte, 1024)
-	for {
-		n, clientAddr, err := conn.ReadFromUDP(buffer)
-		if err != nil {
-			log.Errorf("Error reading UDP packet: %v", err)
-			continue
-		}
+	// Wait for interrupt signal to gracefully shutdown the server
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	logger.Info("Shutdown signal received, stopping server...")
 
-		log.Infof("Received %d bytes from %s", n, clientAddr.String())
+	// Create a deadline for shutdown operations
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
 
-		// Echo the data back for now
-		if _, err := conn.WriteToUDP(buffer[:n], clientAddr); err != nil {
-			log.Errorf("Error sending UDP packet: %v", err)
-		}
+	// Stop HTTP server
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		logger.Errorf("HTTP server shutdown error: %v", err)
 	}
+
+	// Stop TCP server
+	if err := tcpServer.Stop(); err != nil {
+		logger.Errorf("TCP server shutdown error: %v", err)
+	}
+
+	logger.Info("Server stopped successfully")
 }

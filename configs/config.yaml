@@ -1,12 +1,12 @@
 # configs/config.yaml
 servers:
   mediatory:
-    port: 8080
     host: "0.0.0.0"
+    port: 8080
     log_level: "info"
   application:
-    port: 9000
     host: "0.0.0.0"
+    port: 9000
     log_level: "info"
   tcp:
     host: "0.0.0.0"
@@ -14,10 +14,12 @@ servers:
     connection_timeout: 300
     max_connections: 1000
     buffer_size: 4096
+
 stun:
   server: "stun.l.google.com:19302"
   timeout_seconds: 5
   retry_count: 3
+
 connection:
   hole_punch_attempts: 5
   hole_punch_timeout_ms: 500

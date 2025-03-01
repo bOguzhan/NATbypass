@@ -4,34 +4,28 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
 )
 
-// ServerConfig holds configuration for a server component
-type ServerConfig struct {
-	Port     int    `yaml:"port"`
-	Host     string `yaml:"host"`
-	LogLevel string `yaml:"log_level"`
+// MediatoryConfig holds configuration for the mediatory server
+type MediatoryConfig struct {
+	Host     string `yaml:"host" env:"MEDIATORY_HOST" default:"0.0.0.0"`
+	Port     int    `yaml:"port" env:"MEDIATORY_PORT" default:"8080"`
+	LogLevel string `yaml:"log_level" env:"MEDIATORY_LOG_LEVEL" default:"info"`
 }
 
-// StunConfig holds configuration for STUN operations
-type StunConfig struct {
-	Server         string `yaml:"server"`
-	TimeoutSeconds int    `yaml:"timeout_seconds"`
-	RetryCount     int    `yaml:"retry_count"`
+// ApplicationConfig holds configuration for the application server
+type ApplicationConfig struct {
+	Host     string `yaml:"host" env:"APP_HOST" default:"0.0.0.0"`
+	Port     int    `yaml:"port" env:"APP_PORT" default:"9000"`
+	LogLevel string `yaml:"log_level" env:"APP_LOG_LEVEL" default:"info"`
 }
 
-// ConnectionConfig holds NAT traversal configuration parameters
-type ConnectionConfig struct {
-	HolePunchAttempts     int `yaml:"hole_punch_attempts"`
-	HolePunchTimeoutMs    int `yaml:"hole_punch_timeout_ms"`
-	KeepAliveIntervalSecs int `yaml:"keep_alive_interval_seconds"`
-}
-
-// TCPServerConfig holds configuration for a TCP server
+// TCPServerConfig holds the configuration for the TCP server
 type TCPServerConfig struct {
 	// Host to bind the TCP server to
 	Host string `yaml:"host" env:"TCP_SERVER_HOST" default:"0.0.0.0"`
@@ -49,36 +43,48 @@ type TCPServerConfig struct {
 	BufferSize int `yaml:"buffer_size" env:"TCP_BUFFER_SIZE" default:"4096"`
 }
 
-// ApplicationConfig holds configuration for the application
-type ApplicationConfig struct {
-	// TCP server configuration
-	TCP TCPServerConfig `yaml:"tcp"`
-}
-
-// Config is the root configuration structure
+// Config represents the application configuration
 type Config struct {
 	Servers struct {
-		Mediatory   ServerConfig      `yaml:"mediatory"`
+		Mediatory   MediatoryConfig   `yaml:"mediatory"`
 		Application ApplicationConfig `yaml:"application"`
+		TCP         TCPServerConfig   `yaml:"tcp"` // Move TCP config to top level
 	} `yaml:"servers"`
-	Stun       StunConfig       `yaml:"stun"`
-	Connection ConnectionConfig `yaml:"connection"`
+	STUN struct {
+		Server         string `yaml:"server" env:"STUN_SERVER" default:"stun.l.google.com:19302"`
+		TimeoutSeconds int    `yaml:"timeout_seconds" env:"STUN_TIMEOUT" default:"5"`
+		RetryCount     int    `yaml:"retry_count" env:"STUN_RETRY" default:"3"`
+	} `yaml:"stun"`
+	Connection struct {
+		HolePunchAttempts        int `yaml:"hole_punch_attempts" env:"HOLE_PUNCH_ATTEMPTS" default:"5"`
+		HolePunchTimeoutMs       int `yaml:"hole_punch_timeout_ms" env:"HOLE_PUNCH_TIMEOUT_MS" default:"500"`
+		KeepAliveIntervalSeconds int `yaml:"keep_alive_interval_seconds" env:"KEEP_ALIVE_INTERVAL" default:"30"`
+	} `yaml:"connection"`
 }
 
 // LoadConfig loads configuration from a yaml file with environment variable overrides
 func LoadConfig(configPath string) (*Config, error) {
-	// Default configuration
+	// Create default config
 	config := &Config{}
 
-	// Read configuration file
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("error reading config file: %w", err)
-	}
+	// Set defaults
+	// ... (existing default setting code)
 
-	// Parse YAML into config struct
-	if err := yaml.Unmarshal(data, config); err != nil {
-		return nil, fmt.Errorf("error parsing config file: %w", err)
+	// If config file exists, load it
+	if configPath != "" {
+		absPath, err := filepath.Abs(configPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get absolute path: %w", err)
+		}
+
+		data, err := os.ReadFile(absPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read config file: %w", err)
+		}
+
+		if err := yaml.Unmarshal(data, config); err != nil {
+			return nil, fmt.Errorf("failed to parse config file: %w", err)
+		}
 	}
 
 	// Override with environment variables if present
@@ -90,12 +96,12 @@ func LoadConfig(configPath string) (*Config, error) {
 
 	if port := os.Getenv("APPLICATION_PORT"); port != "" {
 		if p, err := strconv.Atoi(port); err == nil {
-			config.Servers.Application.TCP.Port = p
+			config.Servers.Application.Port = p
 		}
 	}
 
 	if stunServer := os.Getenv("STUN_SERVER"); stunServer != "" {
-		config.Stun.Server = stunServer
+		config.STUN.Server = stunServer
 	}
 
 	return config, nil
