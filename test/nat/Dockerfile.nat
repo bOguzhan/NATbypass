@@ -1,0 +1,22 @@
+# File: test/nat/Dockerfile.nat
+
+FROM golang:1.20-alpine
+
+# Install required tools
+RUN apk add --no-cache iptables bash
+
+WORKDIR /app
+COPY . .
+
+# Build the test client
+RUN go build -o /app/bin/nat-test test/nat_client/test_client.go
+
+# Copy the NAT simulation script
+COPY test/nat/simulate_nat.sh /app/bin/
+
+# Set execute permissions
+RUN chmod +x /app/bin/simulate_nat.sh
+RUN chmod +x /app/bin/nat-test
+
+# Entry point that sets up the NAT simulation first, then runs the test client
+ENTRYPOINT ["/app/bin/simulate_nat.sh"]
