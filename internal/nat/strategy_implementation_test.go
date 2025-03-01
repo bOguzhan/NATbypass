@@ -73,6 +73,7 @@ func TestEstablishConnectionInterface(t *testing.T) {
 
 			// We just test that the call doesn't panic - we expect errors since these are stubs
 			_, err = strategy.EstablishConnection(ctx, localAddr, remoteAddr)
+			assert.NoError(t, err)
 			// We don't assert on error as different strategies may return different errors
 		})
 	}

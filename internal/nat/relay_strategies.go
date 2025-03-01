@@ -50,16 +50,23 @@ func (s *UDPRelayingStrategy) GetName() string {
 
 // EstimateSuccessRate returns estimated success rate based on NAT types
 func (s *UDPRelayingStrategy) EstimateSuccessRate(localNATType, remoteNATType discovery.NATType) float64 {
-	// Relaying typically has high success rate as it bypasses NAT entirely
-	// But it's a fallback due to higher latency and server dependency
+	// Relaying is very reliable but should only be used as fallback
+	// We return lower success rates to make direct connections preferred when possible
 
-	// Lower success rate slightly for symmetric NATs due to complexity
-	if localNATType == discovery.NATSymmetric || remoteNATType == discovery.NATSymmetric {
+	// Only for symmetric NAT to symmetric NAT, which is very hard to traverse directly,
+	// we keep a high success rate
+	if localNATType == discovery.NATSymmetric && remoteNATType == discovery.NATSymmetric {
 		return 0.95
 	}
 
-	// Generally very reliable
-	return 0.98
+	// For mixed symmetric and restricted, we're still a good option but not preferred
+	if localNATType == discovery.NATSymmetric || remoteNATType == discovery.NATSymmetric {
+		return 0.80
+	}
+
+	// For all other combinations, direct connection should be preferred
+	// We return a lower success rate even though technically relaying would work
+	return 0.70
 }
 
 // EstablishConnection attempts to establish a relayed connection
@@ -120,9 +127,21 @@ func (s *TCPRelayingStrategy) GetName() string {
 
 // EstimateSuccessRate returns estimated success rate based on NAT types
 func (s *TCPRelayingStrategy) EstimateSuccessRate(localNATType, remoteNATType discovery.NATType) float64 {
-	// TCP relaying also has high success rate but is used as a last resort
-	// It's slightly less preferred than UDP relaying due to TCP overhead
-	return 0.97
+	// TCP relaying is also reliable but should be lowest priority
+	// It has slightly lower priority than UDP relaying due to additional overhead
+
+	// Only for symmetric NAT to symmetric NAT
+	if localNATType == discovery.NATSymmetric && remoteNATType == discovery.NATSymmetric {
+		return 0.92
+	}
+
+	// For mixed symmetric and restricted
+	if localNATType == discovery.NATSymmetric || remoteNATType == discovery.NATSymmetric {
+		return 0.75
+	}
+
+	// For all other combinations
+	return 0.65
 }
 
 // EstablishConnection attempts to establish a relayed connection

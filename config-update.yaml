@@ -1,0 +1,57 @@
+# File: config-update.yaml
+
+# Keep existing main server config
+server:
+  host: 0.0.0.0
+  port: 8080
+  log_level: info
+
+# Server configuration for newer architecture
+servers:
+  mediatory:
+    host: 0.0.0.0
+    port: 8081
+    log_level: info
+  application:
+    host: 0.0.0.0
+    port: 8082
+    log_level: info
+
+# STUN configuration
+stun:
+  server: stun.l.google.com
+  port: 19302
+  timeout: 5s
+  retries: 3
+
+# Signaling configuration
+signaling:
+  host: 0.0.0.0
+  port: 8081
+  conn_ttl: 5m
+  cleanup_interval: 1m
+
+# TCP server configuration for NAT traversal
+tcp:
+  listen_host: 0.0.0.0
+  listen_port: 0
+  connection_timeout: 30s
+  idle_timeout: 2m
+  max_connections: 100
+  buffer_size: 4096
+
+# UDP server configuration for NAT traversal
+udp:
+  listen_host: 0.0.0.0
+  listen_port: 0
+  packet_buffer_size: 4096
+  idle_timeout: 2m
+  max_packet_size: 1500
+
+# NAT traversal configuration
+traversal:
+  preferred_protocol: ""
+  timeout: 30s
+  max_retries: 5
+  relay_server: ""
+  relay_port: 3478

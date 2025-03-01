@@ -2,11 +2,11 @@
 servers:
   mediatory:
     host: "0.0.0.0"
-    port: 8080
+    port: 8081
     log_level: "info"
   application:
     host: "0.0.0.0"
-    port: 9000
+    port: 8082
     log_level: "info"
   tcp:
     host: "0.0.0.0"
@@ -16,11 +16,40 @@ servers:
     buffer_size: 4096
 
 stun:
-  server: "stun.l.google.com:19302"
-  timeout_seconds: 5
-  retry_count: 3
+  server: "stun.l.google.com"
+  port: 19302
+  timeout: 5s
+  retries: 3
 
 connection:
   hole_punch_attempts: 5
   hole_punch_timeout_ms: 500
   keep_alive_interval_seconds: 30
+
+signaling:
+  host: 0.0.0.0
+  port: 8081
+  conn_ttl: 5m
+  cleanup_interval: 1m
+
+tcp:
+  listen_host: 0.0.0.0
+  listen_port: 0  # 0 means OS will assign a random port
+  connection_timeout: 30s
+  idle_timeout: 2m
+  max_connections: 100
+  buffer_size: 4096
+
+udp:
+  listen_host: 0.0.0.0
+  listen_port: 0  # 0 means OS will assign a random port
+  packet_buffer_size: 4096
+  idle_timeout: 2m
+  max_packet_size: 1500
+
+traversal:
+  preferred_protocol: ""  # Empty string means no preference
+  timeout: 30s
+  max_retries: 5
+  relay_server: ""
+  relay_port: 3478  # Default TURN port

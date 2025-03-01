@@ -6,69 +6,88 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
 )
 
-// MediatoryConfig holds configuration for the mediatory server
-type MediatoryConfig struct {
-	Host     string `yaml:"host" env:"MEDIATORY_HOST" default:"0.0.0.0"`
-	Port     int    `yaml:"port" env:"MEDIATORY_PORT" default:"8080"`
-	LogLevel string `yaml:"log_level" env:"MEDIATORY_LOG_LEVEL" default:"info"`
+// ServerConfig contains server-related configuration
+type ServerConfig struct {
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	LogLevel string `yaml:"log_level"`
 }
 
-// ApplicationConfig holds configuration for the application server
-type ApplicationConfig struct {
-	Host     string `yaml:"host" env:"APP_HOST" default:"0.0.0.0"`
-	Port     int    `yaml:"port" env:"APP_PORT" default:"9000"`
-	LogLevel string `yaml:"log_level" env:"APP_LOG_LEVEL" default:"info"`
+// ServersConfig contains configuration for different servers
+type ServersConfig struct {
+	Mediatory   ServerConfig `yaml:"mediatory"`
+	Application ServerConfig `yaml:"application"`
 }
 
-// TCPServerConfig holds the configuration for the TCP server
+// STUNConfig contains STUN server related configuration
+type STUNConfig struct {
+	Server  string        `yaml:"server"`
+	Port    int           `yaml:"port"`
+	Timeout time.Duration `yaml:"timeout"`
+	Retries int           `yaml:"retries"`
+}
+
+// SignalingConfig contains signaling server related configuration
+type SignalingConfig struct {
+	Host            string        `yaml:"host"`
+	Port            int           `yaml:"port"`
+	ConnTTL         time.Duration `yaml:"conn_ttl"`
+	CleanupInterval time.Duration `yaml:"cleanup_interval"`
+}
+
+// TCPServerConfig contains TCP server related configuration for NAT traversal
 type TCPServerConfig struct {
-	// Host to bind the TCP server to
-	Host string `yaml:"host" env:"TCP_SERVER_HOST" default:"0.0.0.0"`
+	ListenHost        string        `yaml:"listen_host"`
+	ListenPort        int           `yaml:"listen_port"`
+	Host              string        `yaml:"-"` // Not in YAML, just for code compatibility
+	Port              int           `yaml:"-"` // Not in YAML, just for code compatibility
+	ConnectionTimeout time.Duration `yaml:"connection_timeout"`
+	IdleTimeout       time.Duration `yaml:"idle_timeout"`
+	MaxConnections    int           `yaml:"max_connections"`
+	BufferSize        int           `yaml:"buffer_size"`
+}
 
-	// Port to listen on
-	Port int `yaml:"port" env:"TCP_SERVER_PORT" default:"5555"`
+// UDPServerConfig contains UDP server related configuration for NAT traversal
+type UDPServerConfig struct {
+	ListenHost       string        `yaml:"listen_host"`
+	ListenPort       int           `yaml:"listen_port"`
+	Host             string        `yaml:"-"` // Alias for ListenHost
+	Port             int           `yaml:"-"` // Alias for ListenPort
+	PacketBufferSize int           `yaml:"packet_buffer_size"`
+	IdleTimeout      time.Duration `yaml:"idle_timeout"`
+	MaxPacketSize    int           `yaml:"max_packet_size"`
+}
 
-	// ConnectionTimeout in seconds for inactive connections
-	ConnectionTimeout int `yaml:"connection_timeout" env:"TCP_CONNECTION_TIMEOUT" default:"300"`
-
-	// MaxConnections is the maximum number of concurrent TCP connections
-	MaxConnections int `yaml:"max_connections" env:"TCP_MAX_CONNECTIONS" default:"1000"`
-
-	// BufferSize for TCP read operations
-	BufferSize int `yaml:"buffer_size" env:"TCP_BUFFER_SIZE" default:"4096"`
+// TraversalConfig contains NAT traversal related configuration
+type TraversalConfig struct {
+	PreferredProtocol string        `yaml:"preferred_protocol"`
+	Timeout           time.Duration `yaml:"timeout"`
+	MaxRetries        int           `yaml:"max_retries"`
+	RelayServer       string        `yaml:"relay_server"`
+	RelayPort         int           `yaml:"relay_port"`
 }
 
 // Config represents the application configuration
 type Config struct {
-	Servers struct {
-		Mediatory   MediatoryConfig   `yaml:"mediatory"`
-		Application ApplicationConfig `yaml:"application"`
-		TCP         TCPServerConfig   `yaml:"tcp"` // Move TCP config to top level
-	} `yaml:"servers"`
-	STUN struct {
-		Server         string `yaml:"server" env:"STUN_SERVER" default:"stun.l.google.com:19302"`
-		TimeoutSeconds int    `yaml:"timeout_seconds" env:"STUN_TIMEOUT" default:"5"`
-		RetryCount     int    `yaml:"retry_count" env:"STUN_RETRY" default:"3"`
-	} `yaml:"stun"`
-	Connection struct {
-		HolePunchAttempts        int `yaml:"hole_punch_attempts" env:"HOLE_PUNCH_ATTEMPTS" default:"5"`
-		HolePunchTimeoutMs       int `yaml:"hole_punch_timeout_ms" env:"HOLE_PUNCH_TIMEOUT_MS" default:"500"`
-		KeepAliveIntervalSeconds int `yaml:"keep_alive_interval_seconds" env:"KEEP_ALIVE_INTERVAL" default:"30"`
-	} `yaml:"connection"`
+	Server    ServerConfig    `yaml:"server"`
+	Servers   ServersConfig   `yaml:"servers"` // For newer code structure
+	STUN      STUNConfig      `yaml:"stun"`
+	Signaling SignalingConfig `yaml:"signaling"`
+	TCP       TCPServerConfig `yaml:"tcp"`
+	UDP       UDPServerConfig `yaml:"udp"`
+	Traversal TraversalConfig `yaml:"traversal"`
 }
 
 // LoadConfig loads configuration from a yaml file with environment variable overrides
 func LoadConfig(configPath string) (*Config, error) {
 	// Create default config
-	config := &Config{}
-
-	// Set defaults
-	// ... (existing default setting code)
+	config := DefaultConfig()
 
 	// If config file exists, load it
 	if configPath != "" {
@@ -90,13 +109,13 @@ func LoadConfig(configPath string) (*Config, error) {
 	// Override with environment variables if present
 	if port := os.Getenv("MEDIATORY_PORT"); port != "" {
 		if p, err := strconv.Atoi(port); err == nil {
-			config.Servers.Mediatory.Port = p
+			config.Server.Port = p
 		}
 	}
 
 	if port := os.Getenv("APPLICATION_PORT"); port != "" {
 		if p, err := strconv.Atoi(port); err == nil {
-			config.Servers.Application.Port = p
+			config.Server.Port = p
 		}
 	}
 
@@ -104,7 +123,78 @@ func LoadConfig(configPath string) (*Config, error) {
 		config.STUN.Server = stunServer
 	}
 
+	// Initialize aliases for backward compatibility
+	config.TCP.Host = config.TCP.ListenHost
+	config.TCP.Port = config.TCP.ListenPort
+	config.UDP.Host = config.UDP.ListenHost
+	config.UDP.Port = config.UDP.ListenPort
+
 	return config, nil
+}
+
+// DefaultConfig returns a default configuration
+func DefaultConfig() *Config {
+	cfg := &Config{
+		Server: ServerConfig{
+			Host:     "0.0.0.0",
+			Port:     8080,
+			LogLevel: "info",
+		},
+		Servers: ServersConfig{
+			Mediatory: ServerConfig{
+				Host:     "0.0.0.0",
+				Port:     8081,
+				LogLevel: "info",
+			},
+			Application: ServerConfig{
+				Host:     "0.0.0.0",
+				Port:     8082,
+				LogLevel: "info",
+			},
+		},
+		STUN: STUNConfig{
+			Server:  "stun.l.google.com",
+			Port:    19302,
+			Timeout: 5 * time.Second,
+			Retries: 3,
+		},
+		Signaling: SignalingConfig{
+			Host:            "0.0.0.0",
+			Port:            8081,
+			ConnTTL:         5 * time.Minute,
+			CleanupInterval: 1 * time.Minute,
+		},
+		TCP: TCPServerConfig{
+			ListenHost:        "0.0.0.0",
+			ListenPort:        0,
+			ConnectionTimeout: 30 * time.Second,
+			IdleTimeout:       2 * time.Minute,
+			MaxConnections:    100,
+			BufferSize:        4096,
+		},
+		UDP: UDPServerConfig{
+			ListenHost:       "0.0.0.0",
+			ListenPort:       0,
+			PacketBufferSize: 4096,
+			IdleTimeout:      2 * time.Minute,
+			MaxPacketSize:    1500,
+		},
+		Traversal: TraversalConfig{
+			PreferredProtocol: "",
+			Timeout:           30 * time.Second,
+			MaxRetries:        5,
+			RelayServer:       "",
+			RelayPort:         3478,
+		},
+	}
+
+	// Set up aliases for backward compatibility
+	cfg.TCP.Host = cfg.TCP.ListenHost
+	cfg.TCP.Port = cfg.TCP.ListenPort
+	cfg.UDP.Host = cfg.UDP.ListenHost
+	cfg.UDP.Port = cfg.UDP.ListenPort
+
+	return cfg
 }
 
 // ConfigureLogger sets up the logger based on configuration

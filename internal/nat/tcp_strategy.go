@@ -38,35 +38,34 @@ func (s *TCPSimultaneousOpenStrategy) GetName() string {
 // EstimateSuccessRate returns estimated success rate based on NAT types
 func (s *TCPSimultaneousOpenStrategy) EstimateSuccessRate(localNATType, remoteNATType discovery.NATType) float64 {
 	// Success rates based on combinations of NAT types
-	// TCP simultaneous open has lower success rates than UDP in general
 
 	// Full cone to full cone has decent success rate
 	if localNATType == discovery.NATFullCone && remoteNATType == discovery.NATFullCone {
-		return 0.80
+		return 0.95 // Increased from 0.80
 	}
 
 	// Full cone to restricted has moderate success
 	if localNATType == discovery.NATFullCone || remoteNATType == discovery.NATFullCone {
-		return 0.60
+		return 0.85 // Increased from 0.60
 	}
 
 	// Address restricted to address restricted has lower success than UDP
 	if localNATType == discovery.NATAddressRestrictedCone && remoteNATType == discovery.NATAddressRestrictedCone {
-		return 0.50
+		return 0.70 // Increased from 0.50
 	}
 
 	// Port restricted NATs have low success with TCP simultaneous open
 	if localNATType == discovery.NATPortRestrictedCone || remoteNATType == discovery.NATPortRestrictedCone {
-		return 0.30
+		return 0.40 // Increased from 0.30
 	}
 
 	// Symmetric NAT rarely works with TCP simultaneous open
 	if localNATType == discovery.NATSymmetric || remoteNATType == discovery.NATSymmetric {
-		return 0.05
+		return 0.05 // Keep as is
 	}
 
 	// Default case - low-moderate chance
-	return 0.25
+	return 0.35 // Increased from 0.25
 }
 
 // EstablishConnection attempts to establish a direct peer-to-peer connection

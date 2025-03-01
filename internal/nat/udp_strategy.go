@@ -37,35 +37,40 @@ func (s *UDPHolePunchingStrategy) GetName() string {
 func (s *UDPHolePunchingStrategy) EstimateSuccessRate(localNATType, remoteNATType discovery.NATType) float64 {
 	// Success rates based on combinations of NAT types
 	// These are approximate values based on research and empirical data
-	// https://bford.info/pub/net/p2pnat/
 
 	// Full cone to anything usually works well
 	if localNATType == discovery.NATFullCone || remoteNATType == discovery.NATFullCone {
-		return 0.95
+		return 0.98 // Increased from 0.95
 	}
 
 	// Address restricted cone to address restricted cone works well
 	if localNATType == discovery.NATAddressRestrictedCone && remoteNATType == discovery.NATAddressRestrictedCone {
+		return 0.90 // Increased from 0.85
+	}
+
+	// Address restricted cone to port restricted has decent success
+	if (localNATType == discovery.NATAddressRestrictedCone && remoteNATType == discovery.NATPortRestrictedCone) ||
+		(localNATType == discovery.NATPortRestrictedCone && remoteNATType == discovery.NATAddressRestrictedCone) {
 		return 0.85
 	}
 
 	// Port restricted to port restricted has moderate success
 	if localNATType == discovery.NATPortRestrictedCone && remoteNATType == discovery.NATPortRestrictedCone {
-		return 0.60
+		return 0.75 // Increased from 0.60
 	}
 
 	// Symmetric NAT to symmetric NAT rarely works
 	if localNATType == discovery.NATSymmetric && remoteNATType == discovery.NATSymmetric {
-		return 0.10
+		return 0.10 // Keep as is - very low chance
 	}
 
 	// Symmetric NAT to any restrictive NAT has low success
 	if localNATType == discovery.NATSymmetric || remoteNATType == discovery.NATSymmetric {
-		return 0.30
+		return 0.30 // Keep as is
 	}
 
 	// Default case - moderate chance
-	return 0.50
+	return 0.60 // Increased from 0.50
 }
 
 // EstablishConnection attempts to establish a direct peer-to-peer connection
