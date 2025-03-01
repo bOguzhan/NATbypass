@@ -17,6 +17,10 @@ if [ ! -f "internal/nat/tcp_server.go" ]; then
     exit 1
 fi
 
+# Clean any old test binaries to avoid stale code issues
+echo -e "${YELLOW}Cleaning up previous test artifacts...${NC}"
+rm -f bin/tcp_server_test
+
 # Build the tests
 echo -e "${YELLOW}Building TCP server tests...${NC}"
 go test -c -o bin/tcp_server_test github.com/bOguzhan/NATbypass/internal/nat
@@ -36,9 +40,10 @@ fi
 echo ""
 
 # Build the standalone TCP server if it doesn't exist
-if [ ! -f "bin/tcp_standalone_test" ] && [ -f "test/tcp/main.go" ]; then
+if [ -f "test/tcp/main.go" ]; then
     echo -e "${YELLOW}Building TCP server standalone test...${NC}"
     mkdir -p bin
+    rm -f bin/tcp_standalone_test  # Remove old binary if it exists
     go build -o bin/tcp_standalone_test test/tcp/main.go
     echo -e "${GREEN}✓ TCP server standalone test built successfully${NC}"
     echo -e "${YELLOW}You can run the standalone TCP server with:${NC}"

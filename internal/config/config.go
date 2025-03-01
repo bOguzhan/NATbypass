@@ -31,11 +31,35 @@ type ConnectionConfig struct {
 	KeepAliveIntervalSecs int `yaml:"keep_alive_interval_seconds"`
 }
 
+// TCPServerConfig holds configuration for a TCP server
+type TCPServerConfig struct {
+	// Host to bind the TCP server to
+	Host string `yaml:"host" env:"TCP_SERVER_HOST" default:"0.0.0.0"`
+
+	// Port to listen on
+	Port int `yaml:"port" env:"TCP_SERVER_PORT" default:"5555"`
+
+	// ConnectionTimeout in seconds for inactive connections
+	ConnectionTimeout int `yaml:"connection_timeout" env:"TCP_CONNECTION_TIMEOUT" default:"300"`
+
+	// MaxConnections is the maximum number of concurrent TCP connections
+	MaxConnections int `yaml:"max_connections" env:"TCP_MAX_CONNECTIONS" default:"1000"`
+
+	// BufferSize for TCP read operations
+	BufferSize int `yaml:"buffer_size" env:"TCP_BUFFER_SIZE" default:"4096"`
+}
+
+// ApplicationConfig holds configuration for the application
+type ApplicationConfig struct {
+	// TCP server configuration
+	TCP TCPServerConfig `yaml:"tcp"`
+}
+
 // Config is the root configuration structure
 type Config struct {
 	Servers struct {
-		Mediatory   ServerConfig `yaml:"mediatory"`
-		Application ServerConfig `yaml:"application"`
+		Mediatory   ServerConfig      `yaml:"mediatory"`
+		Application ApplicationConfig `yaml:"application"`
 	} `yaml:"servers"`
 	Stun       StunConfig       `yaml:"stun"`
 	Connection ConnectionConfig `yaml:"connection"`
@@ -66,7 +90,7 @@ func LoadConfig(configPath string) (*Config, error) {
 
 	if port := os.Getenv("APPLICATION_PORT"); port != "" {
 		if p, err := strconv.Atoi(port); err == nil {
-			config.Servers.Application.Port = p
+			config.Servers.Application.TCP.Port = p
 		}
 	}
 

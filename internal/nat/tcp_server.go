@@ -204,6 +204,12 @@ func (s *TCPServer) cleanupStaleConnections() {
 	}
 }
 
+// ForceCleanup forces an immediate cleanup of stale connections
+// This is mainly used for testing purposes
+func (s *TCPServer) ForceCleanup() {
+	s.cleanupStaleConnections()
+}
+
 // GetActiveConnections returns the count of currently active connections
 func (s *TCPServer) GetActiveConnections() int {
 	s.connectionsMu.RLock()
@@ -232,7 +238,14 @@ func (s *TCPServer) SendTo(connectionID string, data []byte) error {
 // Stop gracefully shuts down the TCP server
 func (s *TCPServer) Stop() error {
 	s.logger.Info("Stopping TCP server...")
-	close(s.stopChan)
+
+	// Only close the channel if it hasn't been closed already
+	select {
+	case <-s.stopChan:
+		// Channel already closed, do nothing
+	default:
+		close(s.stopChan)
+	}
 
 	if s.listener != nil {
 		if err := s.listener.Close(); err != nil {

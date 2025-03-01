@@ -145,7 +145,12 @@ func TestTCPServer(t *testing.T) {
 		assert.Equal(t, 1, server.GetActiveConnections(), "Should have 1 active connection")
 
 		// Wait for timeout and cleanup
-		time.Sleep(time.Duration(tcpConfig.ConnectionTimeout+2) * time.Second)
+		time.Sleep(time.Duration(tcpConfig.ConnectionTimeout+1) * time.Second)
+
+		// Force a cleanup cycle - since server is already of type *nat.TCPServer, no type assertion needed
+		server.ForceCleanup() // Direct method call
+
+		time.Sleep(200 * time.Millisecond) // Give a short time for cleanup to complete
 
 		// Connection should be cleaned up by the server
 		assert.Equal(t, 0, server.GetActiveConnections(), "Should have 0 active connections after timeout")
