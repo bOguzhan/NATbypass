@@ -40,7 +40,7 @@ echo ""
 
 # Build the STUN test utility
 echo "Building STUN test program..."
-go build -o bin/stun_test test/main.go  # Changed from test/stun_test.go to test/main.go
+go build -o bin/stun_test ./test/main.go  # Changed from test/stun_test.go to test/main.go
 echo "✓ STUN test program built successfully"
 echo ""
 
@@ -92,3 +92,4 @@ echo ""
 ./test-tcp-server.sh  # Add this line to include TCP server tests
 
 echo "All tests completed successfully!"
+

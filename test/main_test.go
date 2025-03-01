@@ -8,7 +8,7 @@ import (
 	"github.com/pion/stun"
 )
 
-func main() {
+func testMain() {
 	log.Println("Testing STUN discovery...")
 
 	// Use Google's public STUN server
