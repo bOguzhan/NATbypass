@@ -7,23 +7,44 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-echo -e "${YELLOW}Building TCP server test...${NC}"
-go build -o bin/tcp_server_test test/tcp_server_test.go
+echo -e "${YELLOW}=== Testing TCP Server Implementation ===${NC}"
+echo ""
 
-# Also build dedicated TCP server test
-echo -e "${YELLOW}Building TCP server standalone test...${NC}"
-go build -o bin/tcp_standalone_test test/tcp/main.go
-
-echo -e "${YELLOW}Running TCP server test...${NC}"
-if go test -v ./test -run TestTCPServer; then
-    echo -e "${GREEN}TCP Server test completed successfully!${NC}"
-else
-    echo -e "${RED}TCP Server test failed!${NC}"
+# Check if the TCP server implementation exists
+if [ ! -f "internal/nat/tcp_server.go" ]; then
+    echo -e "${RED}TCP server implementation not found in internal/nat/tcp_server.go${NC}"
+    echo -e "${YELLOW}Make sure you've created the TCP server implementation first${NC}"
     exit 1
 fi
 
-echo -e "${YELLOW}You can also run the standalone TCP server test with:${NC}"
-echo -e "${GREEN}./bin/tcp_standalone_test${NC}"
+# Build the tests
+echo -e "${YELLOW}Building TCP server tests...${NC}"
+go test -c -o bin/tcp_server_test github.com/bOguzhan/NATbypass/internal/nat
+echo -e "${GREEN}✓ TCP server test built successfully${NC}"
+echo ""
 
-# Don't remove the built binaries so they can be used manually
-echo -e "${YELLOW}Test binaries available in ./bin/${NC}"
+# Run the TCP server tests
+echo -e "${YELLOW}Running TCP server unit tests...${NC}"
+go test -v github.com/bOguzhan/NATbypass/internal/nat -run TestTCPServer
+TEST_EXIT_CODE=$?
+
+if [ $TEST_EXIT_CODE -eq 0 ]; then
+    echo -e "${GREEN}✓ TCP server tests passed${NC}"
+else
+    echo -e "${RED}✗ TCP server tests failed with exit code $TEST_EXIT_CODE${NC}"
+fi
+echo ""
+
+# Build the standalone TCP server if it doesn't exist
+if [ ! -f "bin/tcp_standalone_test" ] && [ -f "test/tcp/main.go" ]; then
+    echo -e "${YELLOW}Building TCP server standalone test...${NC}"
+    mkdir -p bin
+    go build -o bin/tcp_standalone_test test/tcp/main.go
+    echo -e "${GREEN}✓ TCP server standalone test built successfully${NC}"
+    echo -e "${YELLOW}You can run the standalone TCP server with:${NC}"
+    echo -e "${GREEN}./bin/tcp_standalone_test${NC}"
+    echo ""
+fi
+
+echo -e "${YELLOW}=== TCP Server Tests Completed! ===${NC}"
+exit $TEST_EXIT_CODE

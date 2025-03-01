@@ -1,4 +1,4 @@
-package test
+package nat_test
 
 import (
 	"context"
