@@ -2,36 +2,43 @@ package main
 
 import (
 	"fmt"
+	"net"
 
 	"github.com/pion/stun"
 )
 
-func main() {
-	// Parse a STUN URI
-	u, err := stun.ParseURI("stun:stun.l.google.com:19302")
+// PublicAddress represents public IP and port discovered via STUN
+type PublicAddress struct {
+	IP   net.IP
+	Port int
+}
+
+// DiscoverPublicAddress uses a STUN server to discover the public IP and port
+func DiscoverPublicAddress(stunServer string) (*PublicAddress, error) {
+	c, err := stun.Dial("udp", stunServer)
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("failed to connect to STUN server: %w", err)
+	}
+	defer c.Close()
+
+	message := stun.MustBuild(stun.TransactionID, stun.BindingRequest)
+
+	var xorAddr stun.XORMappedAddress
+	if err = c.Do(message, func(res stun.Event) {
+		if res.Error != nil {
+			err = res.Error
+			return
+		}
+
+		if err = xorAddr.GetFrom(res.Message); err != nil {
+			return
+		}
+	}); err != nil {
+		return nil, fmt.Errorf("failed to get STUN binding: %w", err)
 	}
 
-	// Creating a "connection" to STUN server.
-	c, err := stun.DialURI(u, &stun.DialConfig{})
-	if err != nil {
-		panic(err)
-	}
-	// Building binding request with random transaction id.
-	message := stun.MustBuild(stun.TransactionID, stun.BindingRequest)
-	// Sending request to STUN server, waiting for response message.
-	if err := c.Do(message, func(res stun.Event) {
-		if res.Error != nil {
-			panic(res.Error)
-		}
-		// Decoding XOR-MAPPED-ADDRESS attribute from message.
-		var xorAddr stun.XORMappedAddress
-		if err := xorAddr.GetFrom(res.Message); err != nil {
-			panic(err)
-		}
-		fmt.Println("your IP is", xorAddr.IP)
-	}); err != nil {
-		panic(err)
-	}
+	return &PublicAddress{
+		IP:   xorAddr.IP,
+		Port: xorAddr.Port,
+	}, nil
 }
