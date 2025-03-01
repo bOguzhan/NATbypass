@@ -37,14 +37,14 @@ func DiscoverPublicAddress(stunServer string) (*PublicAddress, error) {
 
 // DiscoverPublicAddressWithConfig discovers the public IP and port using a STUN server with custom config
 func DiscoverPublicAddressWithConfig(config STUNConfig) (*PublicAddress, error) {
-	// Create a timeout duration from the seconds value
-	timeout := time.Duration(config.TimeoutSeconds) * time.Second
-
 	c, err := stun.Dial("udp", config.Server)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to STUN server: %w", err)
 	}
 	defer c.Close()
+
+	// Create a timeout duration from the seconds value
+	c.SetRTO(time.Duration(config.TimeoutSeconds) * time.Second)
 
 	message := stun.MustBuild(stun.TransactionID, stun.BindingRequest)
 
