@@ -22,6 +22,10 @@ build-stun-test:
 	@mkdir -p $(BUILD_DIR)
 	$(GO) build -o $(BUILD_DIR)/stun_test test/main.go
 
+build-tcp-test:
+	@echo "Building TCP server test utility..."
+	$(GO) build -o $(BUILD_DIR)/tcp_standalone_test test/tcp/main.go
+
 test:
 	@echo "Running all tests..."
 	$(GO) test -v ./...
@@ -34,6 +38,10 @@ test-networking:
 	@echo "Testing networking package..."
 	$(GO) test -v ./pkg/networking
 
+test-tcp:
+	@echo "Running TCP server tests..."
+	$(GO) test -v ./test -run TestTCPServer
+
 clean:
 	@echo "Cleaning up..."
 	rm -rf $(BUILD_DIR)
@@ -45,4 +53,8 @@ run-mediatory: build-mediatory
 run-application: build-application
 	@echo "Running application server..."
 	./$(BUILD_DIR)/application-server
+
+run-tcp-test: build-tcp-test
+	@echo "Running TCP server test utility..."
+	./$(BUILD_DIR)/tcp_standalone_test
 

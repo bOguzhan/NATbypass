@@ -45,6 +45,26 @@ func main() {
 
 	log.Infof("Application Server listening on UDP %s", serverAddr)
 
+	// Initialize and start TCP server
+	tcpServer := nat.NewTCPServer(&config.TCPServerConfig{
+		Host:              appConfig.TCP.Host,
+		Port:              appConfig.TCP.Port,
+		ConnectionTimeout: appConfig.TCP.ConnectionTimeout,
+		MaxConnections:    appConfig.TCP.MaxConnections,
+		BufferSize:        appConfig.TCP.BufferSize,
+	}, logger)
+
+	if err := tcpServer.Start(ctx); err != nil {
+		logger.Fatalf("Failed to start TCP server: %v", err)
+	}
+
+	// Add TCP server to graceful shutdown
+	defer func() {
+		if err := tcpServer.Stop(); err != nil {
+			logger.Errorf("Error stopping TCP server: %v", err)
+		}
+	}()
+
 	// Basic UDP packet handling loop
 	buffer := make([]byte, 1024)
 	for {

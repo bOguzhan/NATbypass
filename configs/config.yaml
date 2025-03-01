@@ -8,6 +8,12 @@ servers:
     port: 9000
     host: "0.0.0.0"
     log_level: "info"
+  tcp:
+    host: "0.0.0.0"
+    port: 5555
+    connection_timeout: 300
+    max_connections: 1000
+    buffer_size: 4096
 stun:
   server: "stun.l.google.com:19302"
   timeout_seconds: 5

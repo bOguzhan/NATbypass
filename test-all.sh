@@ -84,3 +84,11 @@ echo "=== All tests completed successfully! ==="
 echo "You can now run the STUN test manually with: bin/stun_test"
 echo "Run the integrated test suite with: go test ./..."
 echo ""
+
+# Run each test script
+./test-mediatory.sh
+./test-signaling-api.sh
+./test-udp-server.sh
+./test-tcp-server.sh  # Add this line to include TCP server tests
+
+echo "All tests completed successfully!"
