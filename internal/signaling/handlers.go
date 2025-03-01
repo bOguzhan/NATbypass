@@ -117,8 +117,8 @@ func (h *Handlers) GetPublicAddress(c *gin.Context) {
 	stunServer := "stun.l.google.com:19302" // Default STUN server
 
 	// Use config if available
-	if h.config != nil && h.config.Stun.Server != "" {
-		stunServer = h.config.Stun.Server
+	if h.config != nil && h.config.STUN.Server != "" {
+		stunServer = h.config.STUN.Server
 	}
 
 	h.logger.Debug("Attempting STUN discovery for client address")
@@ -132,8 +132,8 @@ func (h *Handlers) GetPublicAddress(c *gin.Context) {
 
 	// Use config values if available
 	if h.config != nil {
-		stunConfig.TimeoutSeconds = h.config.Stun.TimeoutSeconds
-		stunConfig.RetryCount = h.config.Stun.RetryCount
+		stunConfig.TimeoutSeconds = h.config.STUN.TimeoutSeconds
+		stunConfig.RetryCount = h.config.STUN.RetryCount
 	}
 
 	addr, err := networking.DiscoverPublicAddressWithConfig(stunConfig)
